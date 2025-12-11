@@ -1,0 +1,407 @@
+{
+    "master": [
+        {
+            "idx": 0,
+            "appTimePeriod": 1000000,
+            "refClockSyncCycles": 1,
+            "slave": [
+                {
+                    "idx": 0,
+                    "type": "generic",
+                    "vid": "0000009a",
+                    "pid": "00030924",
+                    "configPdos": true,
+                    "sdo": [
+                        {
+                            "idx": "6075",
+                            "subIdx": "0",
+                            "byteLen": 2,
+                            "action": "upload",
+                            "name": "motor_rated_current"
+                        },
+                        {
+                            "idx": "607D",
+                            "subIdx": "1",
+                            "byteLen": 4,
+                            "action": "upload",
+                            "name": "min_soft_position_limit"
+                        },
+                        {
+                            "idx": "607D",
+                            "subIdx": "2",
+                            "byteLen": 4,
+                            "action": "upload",
+                            "name": "max_soft_position_limit"
+                        },
+                        {
+                            "idx": "607F",
+                            "subIdx": "0",
+                            "byteLen": 4,
+                            "action": "upload",
+                            "name": "max_profile_velocity"
+                        }
+                    ],
+                    "syncManager": [
+                        {
+                            "idx": 0,
+                            "dir": "out"
+                        },
+                        {
+                            "idx": 1,
+                            "dir": "in"
+                        },
+                        {
+                            "idx": 2,
+                            "dir": "out",
+                            "pdo": [
+                                {
+                                    "idx": "1607",
+                                    "pdoEntry": [
+                                        {
+                                            "idx": "6040",
+                                            "subIdx": "00",
+                                            "bitLen": 16,
+                                            "type": "uint16",
+                                            "name": "control_word"
+                                        },
+                                        {
+                                            "idx": "6060",
+                                            "subIdx": "00",
+                                            "bitLen": 8,
+                                            "type": "int8",
+                                            "name": "operation_mode"
+                                        },
+                                        {
+                                            "idx": "6071",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int16",
+                                            "name": "target_torque"
+                                        },
+                                        {
+                                            "idx": "60FF",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int32",
+                                            "name": "target_velocity"
+                                        },
+                                        {
+                                            "idx": "60B1",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int32",
+                                            "name": "velocity_offset"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "idx": "1608",
+                                    "pdoEntry": [
+                                        {
+                                            "idx": "6081",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "profile_velocity"
+                                        },
+                                        {
+                                            "idx": "6082",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "end_velocity"
+                                        },
+                                        {
+                                            "idx": "6083",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "profile_acceleration"
+                                        },
+                                        {
+                                            "idx": "6084",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "profile_deceleration"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "idx": 3,
+                            "dir": "in",
+                            "pdo": [
+                                {
+                                    "idx": "1A07",
+                                    "pdoEntry": [
+                                        {
+                                            "idx": "603F",
+                                            "subIdx": "00",
+                                            "bitLen": 16,
+                                            "type": "uint16",
+                                            "name": "error_code"
+                                        },
+                                        {
+                                            "idx": "6041",
+                                            "subIdx": "00",
+                                            "bitLen": 16,
+                                            "type": "uint16",
+                                            "name": "status_word"
+                                        },
+                                        {
+                                            "idx": "6061",
+                                            "subIdx": "00",
+                                            "bitLen": 8,
+                                            "type": "int8",
+                                            "name": "operation_mode_display"
+                                        },
+                                        {
+                                            "idx": "6064",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int32",
+                                            "name": "position_actual_value"
+                                        },
+                                        {
+                                            "idx": "606C",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int32",
+                                            "name": "velocity_actual_value"
+                                        },
+                                        {
+                                            "idx": "6077",
+                                            "subIdx": "00",
+                                            "bitLen": 16,
+                                            "type": "int16",
+                                            "name": "torque_actual_value"
+                                        },
+                                        {
+                                            "idx": "6079",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "voltage_actual_value"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "idx": 1,
+                    "reference": 0
+                },
+                {
+                    "idx": 2,
+                    "type": "generic",
+                    "vid": "0000009a",
+                    "pid": "00030924",
+                    "configPdos": true,
+                    "sdo": [
+                        {
+                            "idx": "6075",
+                            "subIdx": "0",
+                            "byteLen": 2,
+                            "action": "upload",
+                            "name": "motor_rated_current"
+                        },
+                        {
+                            "idx": "607D",
+                            "subIdx": "1",
+                            "byteLen": 4,
+                            "action": "upload",
+                            "name": "min_soft_position_limit"
+                        },
+                        {
+                            "idx": "607D",
+                            "subIdx": "2",
+                            "byteLen": 4,
+                            "action": "upload",
+                            "name": "max_soft_position_limit"
+                        },
+                        {
+                            "idx": "607F",
+                            "subIdx": "0",
+                            "byteLen": 4,
+                            "action": "upload",
+                            "name": "max_profile_velocity"
+                        }
+                    ],
+                    "syncManager": [
+                        {
+                            "idx": 0,
+                            "dir": "out"
+                        },
+                        {
+                            "idx": 1,
+                            "dir": "in"
+                        },
+                        {
+                            "idx": 2,
+                            "dir": "out",
+                            "pdo": [
+                                {
+                                    "idx": "1607",
+                                    "pdoEntry": [
+                                        {
+                                            "idx": "6040",
+                                            "subIdx": "00",
+                                            "bitLen": 16,
+                                            "type": "uint16",
+                                            "name": "control_word"
+                                        },
+                                        {
+                                            "idx": "6060",
+                                            "subIdx": "00",
+                                            "bitLen": 8,
+                                            "type": "int8",
+                                            "name": "operation_mode"
+                                        },
+                                        {
+                                            "idx": "6071",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int16",
+                                            "name": "target_torque"
+                                        },
+                                        {
+                                            "idx": "607A",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int32",
+                                            "name": "target_position"
+                                        },
+                                        {
+                                            "idx": "60B0",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int32",
+                                            "name": "position_offset"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "idx": "1608",
+                                    "pdoEntry": [
+                                        {
+                                            "idx": "6081",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "profile_velocity"
+                                        },
+                                        {
+                                            "idx": "6082",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "end_velocity"
+                                        },
+                                        {
+                                            "idx": "6083",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "profile_acceleration"
+                                        },
+                                        {
+                                            "idx": "6084",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "profile_deceleration"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "idx": 3,
+                            "dir": "in",
+                            "pdo": [
+                                {
+                                    "idx": "1A07",
+                                    "pdoEntry": [
+                                        {
+                                            "idx": "603F",
+                                            "subIdx": "00",
+                                            "bitLen": 16,
+                                            "type": "uint16",
+                                            "name": "error_code"
+                                        },
+                                        {
+                                            "idx": "6041",
+                                            "subIdx": "00",
+                                            "bitLen": 16,
+                                            "type": "uint16",
+                                            "name": "status_word"
+                                        },
+                                        {
+                                            "idx": "6061",
+                                            "subIdx": "00",
+                                            "bitLen": 8,
+                                            "type": "int8",
+                                            "name": "operation_mode_display"
+                                        },
+                                        {
+                                            "idx": "6064",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int32",
+                                            "name": "position_actual_value"
+                                        },
+                                        {
+                                            "idx": "606C",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "int32",
+                                            "name": "velocity_actual_value"
+                                        },
+                                        {
+                                            "idx": "6077",
+                                            "subIdx": "00",
+                                            "bitLen": 16,
+                                            "type": "int16",
+                                            "name": "torque_actual_value"
+                                        },
+                                        {
+                                            "idx": "6079",
+                                            "subIdx": "00",
+                                            "bitLen": 32,
+                                            "type": "uint32",
+                                            "name": "voltage_actual_value"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "idx": 3,
+                    "reference": 2
+                },
+                {
+                    "idx": 4,
+                    "reference": 2
+                },
+                {
+                    "idx": 5,
+                    "reference": 2
+                },
+                {
+                    "idx": 6,
+                    "reference": 0
+                },
+                {
+                    "idx": 7,
+                    "reference": 0
+                }
+            ]
+        }
+    ]
+}

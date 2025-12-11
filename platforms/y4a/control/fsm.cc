@@ -1,0 +1,86 @@
+#include "fsm.h"
+
+namespace y4a {
+
+FSM::FSM(RobotModel& robot_model) {
+  last_fsm_id_ = -1;
+  state_changed_ = false;
+  EDamp_signal_ = false;
+  tau_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);
+  rl_ = std::make_shared<RL>(robot_model);
+  safe_mode_ = true;
+#if SIM_ENABLE
+  ros_publisher_ = ROS::Publisher::getInstance();
+#endif
+}
+
+FSM::~FSM() {}
+
+void FSM::Initialize(RobotModel& robot_model) {}
+
+void FSM::Run(RobotModel& robot_model) {
+  auto start = std::chrono::high_resolution_clock::now();
+
+  if (!CheckSafety(robot_model)) {
+    fsm_id_ = static_cast<int>(FsmId::Rl);  // Safe state
+  } else {
+    fsm_id_ = static_cast<int>(FsmId::RlEDamp);
+  }
+
+  switch (fsm_id_) {
+    case static_cast<int>(FsmId::Rl):
+      rl_->Run(robot_model);
+      tau_ = rl_->tau();
+      break;
+
+    case static_cast<int>(FsmId::RlEDamp):
+      rl_->RunEDamp(robot_model);
+      tau_ = rl_->tau();
+      break;
+
+    default:
+      break;
+  }
+
+  auto end = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+  double time_ns = duration.count();
+  double time_ms = time_ns / 1000000;
+}
+
+bool FSM::CheckSafety(RobotModel& robot_model) {
+  std::vector<Limits> joint_limits = {
+      {AllJoints::left_hip_pitch_joint, -2.35, 3.05, -16, 16, -85, 85}, {AllJoints::left_knee_joint, -0.33, 2.1, -14, 14, -120, 120},
+      {AllJoints::left_wheel_joint, -1000, 1000, -15, 15, -150, 150},   {AllJoints::right_hip_pitch_joint, -2.35, 3.05, -16, 16, -85, 85},
+      {AllJoints::right_knee_joint, -0.33, 2.1, -14, 14, -120, 120},    {AllJoints::right_wheel_joint, -1000, 1000, -15, 15, -150, 150}};
+
+  for (const auto& limit : joint_limits) {
+    int index = static_cast<int>(limit.joint);
+    if ((robot_model.q_rpy[index] < limit.q_min || robot_model.q_rpy[index] > limit.q_max) && (index != static_cast<int>(AllJoints::left_wheel_joint)) &&
+        (index != static_cast<int>(AllJoints::right_wheel_joint))) {
+      LOG(ERROR) << "q of Joint " << robot_model.GetJointString(index) << " is out of range!"
+                 << " q is " << robot_model.q_rpy[index] << "\n";
+      LOG(ERROR) << "Robot is in unsafe state!!!";
+      EDamp_signal_ = true;
+      return EDamp_signal_;
+    }
+    if (robot_model.qdot[index] < limit.qdot_min || robot_model.qdot[index] > limit.qdot_max) {
+      LOG(ERROR) << "qdot of Joint " << robot_model.GetJointString(index) << " is out of range!"
+                 << " qdot is " << robot_model.qdot[index] << "\n";
+      LOG(ERROR) << "Robot is in unsafe state!!!";
+      EDamp_signal_ = true;
+      return EDamp_signal_;
+    }
+    if (tau_[index - 6] < limit.tau_min || tau_[index - 6] > limit.tau_max) {
+      LOG(WARNING) << "tau of Joint " << robot_model.GetJointString(index) << " is out of range!"
+                   << " tau is " << tau_[index - 6] << "\n";
+      tau_[index - 6] = std::clamp(tau_[index - 6], limit.tau_min, limit.tau_max);
+      LOG(ERROR) << "Robot is in unsafe state!!!";
+      EDamp_signal_ = true;
+      return EDamp_signal_;
+    }
+  }
+  return EDamp_signal_;
+}
+
+}  // namespace y4a
