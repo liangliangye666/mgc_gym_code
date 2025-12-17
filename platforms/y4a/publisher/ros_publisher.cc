@@ -330,5 +330,5 @@ void Publisher::double_callback(const std::string& topic_name,
   double_publisher_[topic_name]->publish(double_msg);
 }
 
-Publisher::~Publisher() { LOG(INFO) << "Stop sim publisher ..."; }
+Publisher::~Publisher() {}
 }  // namespace ROS

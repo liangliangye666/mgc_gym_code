@@ -20,6 +20,7 @@
 #include "joystick.h"
 #include "math/gac_math.h"
 #include "ros_publisher.h"
+#include "imu.h"
 
 #include <glog/logging.h>
 #include <yaml-cpp/yaml.h>
@@ -106,6 +107,7 @@ class RobotModel {
   void UpdateMujocoJointStates(const mjModel* m, mjData* d);
   const mjModel* mj_model() { return mj_model_; }
   const mjData* mj_data() { return mj_data_; }
+  std::shared_ptr<JoyStick> joystick() { return joystick_; }
 #endif
 #if PHYSICS_ENABLE
   void UpdateRealJointStates(standmode_output_t* standmode_output, standmode_input_t* standmode_input);
@@ -116,7 +118,6 @@ class RobotModel {
   pinocchio::Data& pino_data() { return pino_data_; }
   pinocchio::Model& pino_model_fixed() { return pino_model_fixed_; }
   pinocchio::Data& pino_data_fixed() { return pino_data_fixed_; }
-  std::shared_ptr<JoyStick> joystick() { return joystick_; }
   std::string GetJointString(int index);
 
   // Robot cmds
@@ -150,13 +151,6 @@ class RobotModel {
   double mass;
 
   // State estimation
-  struct Orientation {
-    Eigen::Vector3d euler;      // 欧拉角
-    Eigen::Quaterniond quat;    // 四元数
-    Eigen::Vector3d acc;        // 加速度
-    Eigen::Vector3d omega;      // 角速度
-    Eigen::Vector3d euler_dot;  // 欧拉角变化率
-  };
   Orientation ori_base_local_, ori_base_world_;
   Eigen::VectorXd observed_value;
 
@@ -164,18 +158,21 @@ class RobotModel {
   void AddFrames();
   void UpdateKinematic();
   void UpdateDynamic();
-  void UpdateMisc();
+  // void UpdateMisc();
   void PublishRobotStates();
 #if SIM_ENABLE
   // Mujoco
   const mjModel* mj_model_;
   const mjData* mj_data_;
+  std::shared_ptr<ROS::Publisher> ros_publisher_;
+  std::shared_ptr<JoyStick> joystick_;
 #endif
   pinocchio::Model pino_model_;
   pinocchio::Data pino_data_;
   pinocchio::Model pino_model_fixed_;
   pinocchio::Data pino_data_fixed_;
   std::unique_ptr<JointVelEstimator> joint_vel_est_;
+  std::unique_ptr<IMU> imu_;
 
   // IMU
   double yaw_offset_;
@@ -188,8 +185,6 @@ class RobotModel {
   standmode_output_t* standmode_output_;
   standmode_input_t* standmode_input_;
 #endif
-  std::shared_ptr<ROS::Publisher> ros_publisher_;
-  std::shared_ptr<JoyStick> joystick_;
   YAML::Node config_;
 };
 

@@ -73,6 +73,12 @@ void RobotModel::Initialize() {
   R_WB = Eigen::Matrix3d::Identity();
   R_BW = Eigen::Matrix3d::Identity();
   R_HB = Eigen::Matrix3d::Identity();
+
+#if SIM_ENABLE
+  imu_ = std::make_unique<IMU>();
+#else
+  imu_ = std::make_unique<IMU>(Eigen::Vector3d(0.0, 0.0, M_PI));
+#endif
 }
 
 #if SIM_ENABLE
@@ -158,10 +164,10 @@ void RobotModel::UpdateRealJointStates(standmode_output_t* standmode_output, sta
   standmode_input_ = standmode_input;
   control_dt = 0.005;
 
-  ori_base_local_.euler << standmode_input_->IMU_signals.IMU_yaw, standmode_input_->IMU_signals.IMU_pitch, standmode_input_->IMU_signals.IMU_roll;
+  ori_base_world_.euler << standmode_input_->IMU_signals.IMU_yaw, standmode_input_->IMU_signals.IMU_pitch, standmode_input_->IMU_signals.IMU_roll;
   ori_base_local_.omega << standmode_input_->IMU_signals.IMU_wx_body, standmode_input_->IMU_signals.IMU_wy_body, standmode_input_->IMU_signals.IMU_wz_body;
   ori_base_local_.acc << standmode_input_->IMU_signals.IMU_accx, standmode_input_->IMU_signals.IMU_accy, standmode_input_->IMU_signals.IMU_accz;
-
+  imu_->Update(ori_base_local_, ori_base_world_);
   // Update q_rpy
   q_rpy.segment(0, 3) = Eigen::Vector3d::Zero();
   q_rpy[3] = ori_base_local_.euler[2];
@@ -240,7 +246,7 @@ void RobotModel::UpdateRealJointStates(standmode_output_t* standmode_output, sta
   q_fixed = q_pino.segment(7, pino_model_fixed_.nq);
   qdot_fixed = qdot.segment(6, pino_model_fixed_.nv);
   // joystick
-  joystick_->Update(standmode_input);
+  // joystick_->Update(standmode_input);
 }
 
 #endif
@@ -249,7 +255,7 @@ void RobotModel::UpdateModel() {
   AddFrames();  // 添加两个坐标系,左轮在左膝坐标系,右轮在右膝关节坐标系
   UpdateKinematic();
   UpdateDynamic();
-  UpdateMisc();  // 更新一些杂项
+  // UpdateMisc();  // 更新一些杂项
   PublishRobotStates();
 }
 
@@ -295,7 +301,7 @@ void RobotModel::UpdateDynamic() {
   mass = pino_data_.mass[0];
 }
 
-void RobotModel::UpdateMisc() { fsm_id_ = joystick_->fsm_id(); }
+// void RobotModel::UpdateMisc() { fsm_id_ = joystick_->fsm_id(); }
 
 void RobotModel::PublishRobotStates() {
   // ros_publisher_->Publish("l4a/model/q", q_rpy);

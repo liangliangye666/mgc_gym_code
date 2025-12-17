@@ -171,7 +171,7 @@ def run_mujoco(policy, cfg):
     # Set the initial state
     initialize_qpos(model, data)
 
-    default_q = data.qpos[7:]
+    default_q = data.qpos[7:].copy()
 
     mujoco.mj_step(model, data)
     viewer = mujoco_viewer.MujocoViewer(model, data)

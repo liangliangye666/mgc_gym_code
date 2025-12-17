@@ -2,8 +2,8 @@
 
 namespace y4a {
 RL::RL(RobotModel& robot_model) {
-  FLAGS_logtostderr = 1;
-  FLAGS_colorlogtostderr = 1;
+  // FLAGS_logtostderr = 1;
+  // FLAGS_colorlogtostderr = 1;
 
   num_obs_ = 27;                                   // 观测值数目,输入到actor网络
   num_actions_ = robot_model.pino_model().nv - 6;  // 自由度数目,输出到电机执行
@@ -40,7 +40,7 @@ RL::RL(RobotModel& robot_model) {
 
   iter = 1;
 
-  ros_publisher_ = ROS::Publisher::getInstance();
+  // ros_publisher_ = ROS::Publisher::getInstance();
 
 // Load parameters
 #if SIM_ENABLE
@@ -68,8 +68,8 @@ RL::RL(RobotModel& robot_model) {
 
 RL::~RL() {
   // 停止推理线程
-  should_stop_ = true;
-  shared_data_.cv.notify_one();
+  should_stop_.store(true, std::memory_order_release);
+  shared_data_.cv.notify_all();
   if (inference_thread_.joinable()) {
     inference_thread_.join();
   }
@@ -79,8 +79,8 @@ void RL::InferenceLoop() {
   while (!should_stop_) {
     // 等待推理请求
     Eigen::VectorXd obs, obs_hist, est_latent_hist, cmd;
-    Eigen::VectorXd priv_latent = Eigen::VectorXd::Zero(num_priv_);
-    Eigen::VectorXd scan_latent = Eigen::VectorXd::Zero(num_scan_);
+    // Eigen::VectorXd priv_latent = Eigen::VectorXd::Zero(num_priv_);
+    // Eigen::VectorXd scan_latent = Eigen::VectorXd::Zero(num_scan_);
     Eigen::Vector3d base_vel;
 
     {
@@ -157,32 +157,33 @@ void RL::InferenceLoop() {
       std::cerr << "Torch error in inference thread: " << e.what() << std::endl;
     }
   }
+  std::cout << "InferenceLoop running\n";
 }
 
 void RL::Run(RobotModel& robot_model) {
-  double forward_or_back = robot_model.joystick()->forward_or_back();
-  double left_or_right = robot_model.joystick()->left_or_right();
+  // double forward_or_back = robot_model.joystick()->forward_or_back();
+  // double left_or_right = robot_model.joystick()->left_or_right();
 
-  if (robot_model.joystick()->forward_pad() && !last_forward_pad_) {
-    forward_back_error_ += 0.05;
-  }
-  if (robot_model.joystick()->back_pad() && !last_back_pad_) {
-    forward_back_error_ -= 0.05;
-  }
-  if (robot_model.joystick()->left_pad() && !last_left_pad_) {
-    left_right_error_ += 0.01;
-  }
-  if (robot_model.joystick()->right_pad() && !last_right_pad_) {
-    left_right_error_ -= 0.01;
-  }
+  // if (robot_model.joystick()->forward_pad() && !last_forward_pad_) {
+  //   forward_back_error_ += 0.05;
+  // }
+  // if (robot_model.joystick()->back_pad() && !last_back_pad_) {
+  //   forward_back_error_ -= 0.05;
+  // }
+  // if (robot_model.joystick()->left_pad() && !last_left_pad_) {
+  //   left_right_error_ += 0.01;
+  // }
+  // if (robot_model.joystick()->right_pad() && !last_right_pad_) {
+  //   left_right_error_ -= 0.01;
+  // }
 
-  forward_back_error_ = std::clamp(forward_back_error_, -1.0, 1.0);
-  left_right_error_ = std::clamp(left_right_error_, -1.0, 1.0);
+  // forward_back_error_ = std::clamp(forward_back_error_, -1.0, 1.0);
+  // left_right_error_ = std::clamp(left_right_error_, -1.0, 1.0);
 
-  last_forward_pad_ = robot_model.joystick()->forward_pad();
-  last_back_pad_ = robot_model.joystick()->back_pad();
-  last_left_pad_ = robot_model.joystick()->left_pad();
-  last_right_pad_ = robot_model.joystick()->right_pad();
+  // last_forward_pad_ = robot_model.joystick()->forward_pad();
+  // last_back_pad_ = robot_model.joystick()->back_pad();
+  // last_left_pad_ = robot_model.joystick()->left_pad();
+  // last_right_pad_ = robot_model.joystick()->right_pad();
 
   // 基坐标系的机身线速度和角速度
   Eigen::Vector3d base_vel = robot_model.qdot.segment(0, 3);

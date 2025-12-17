@@ -11,8 +11,8 @@
 #include <cmath>
 
 std::string urdf_path = "/sim/model/y4a/urdf/y4aurdf20250827.urdf";
-static std::shared_ptr<ROS::Publisher> ros_publisher;
-static std::thread spin_thread;
+// static std::shared_ptr<ROS::Publisher> ros_publisher;
+// static std::thread spin_thread;
 
 double call_time_ms = 0.0;  // Initialize time_ms to 0.0
 double flag = 0;
@@ -33,31 +33,31 @@ void standMode_initialize(standmode_output_t* standmode_output, standmode_input_
   FLAGS_logtostderr = 1;
   FLAGS_colorlogtostderr = 1;
 
-  int argc = 0;
-  char** argv = nullptr;
-  try {
-    rclcpp::init(argc, argv);
-    std::cout << "ROS initialized successfully in standMode_step" << std::endl;
+  // int argc = 0;
+  // char** argv = nullptr;
+  // try {
+  //   rclcpp::init(argc, argv);
+  //   std::cout << "ROS initialized successfully in standMode_step" << std::endl;
 
-    // Get SimPublisher instance
-    ros_publisher = ROS::Publisher::getInstance();
+  //   // Get SimPublisher instance
+  //   ros_publisher = ROS::Publisher::getInstance();
 
-    // Launch ROS spin thread
-    spin_thread = std::thread(
-        [](std::shared_ptr<ROS::Publisher> node) {
-          try {
-            rclcpp::spin(node);
-          } catch (const std::exception& e) {
-            std::cerr << "Exception in spin thread: " << e.what() << std::endl;
-          }
-        },
-        ros_publisher);
+  //   // Launch ROS spin thread
+  //   spin_thread = std::thread(
+  //       [](std::shared_ptr<ROS::Publisher> node) {
+  //         try {
+  //           rclcpp::spin(node);
+  //         } catch (const std::exception& e) {
+  //           std::cerr << "Exception in spin thread: " << e.what() << std::endl;
+  //         }
+  //       },
+  //       ros_publisher);
 
-    spin_thread.detach();  // 设置线程为分离模式
-  } catch (const std::exception& e) {
-    std::cerr << "Error during ROS initialization: " << e.what() << std::endl;
-    return;
-  }
+  //   spin_thread.detach();  // 设置线程为分离模式
+  // } catch (const std::exception& e) {
+  //   std::cerr << "Error during ROS initialization: " << e.what() << std::endl;
+  //   return;
+  // }
 
   return;
 }
@@ -75,15 +75,24 @@ void SetParameters(standmode_output_t* standmode_output, standmode_input_t* stan
   standmode_output->joints_cmd.joint_w_pitch_r.enable = 1;
 
   // 设置模式：操作模式为1是位置模式，3是速度模式，4是力矩模式，11是力位混合模式
-  standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 4;
-  standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 1;
-  standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 4;
-  standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 4;
+  // standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 4;
+  // standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 1;
+  // standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 4;
+  // standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 4;
 
-  standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 4;
+  // standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 4;
+  // standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 1;
+  // standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 4;
+  // standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 4;
+  standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 1;
+  standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 1;
+  standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 1;
+  standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 3;
+
+  standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 1;
   standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 1;
-  standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 4;
-  standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 4;
+  standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 1;
+  standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 3;
 }
 
 void standMode_step(standmode_output_t* standmode_output, standmode_input_t* standmode_input) {
@@ -136,14 +145,26 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
     tau_fsm = fsm.tau();
     tau_cmd = tau_fsm;
     flag = 1.0;
+    robot_model.observed_value[1] = tau_cmd[0];
+    robot_model.observed_value[2] = tau_cmd[1];
+    robot_model.observed_value[3] = tau_cmd[2];
+    robot_model.observed_value[4] = tau_cmd[3];
+    robot_model.observed_value[5] = tau_cmd[4];
+    robot_model.observed_value[6] = tau_cmd[5];
   } else {
     tau_cmd << tau_joint;
     pos_cmd = qDes;
     vel_cmd = qdotDes;
   }
 
+  standmode_output->joints_cmd.joint_h_pitch_l.pos_cmd = -0.349;
+  standmode_output->joints_cmd.joint_h_pitch_r.pos_cmd = -0.349;
   standmode_output->joints_cmd.joint_h_roll_l.pos_cmd = 0;
   standmode_output->joints_cmd.joint_h_roll_r.pos_cmd = 0;
+  standmode_output->joints_cmd.joint_k_pitch_l.pos_cmd = 0.542;
+  standmode_output->joints_cmd.joint_k_pitch_r.pos_cmd = 0.542;
+  standmode_output->joints_cmd.joint_w_pitch_l.vel_cmd = 0;
+  standmode_output->joints_cmd.joint_w_pitch_r.vel_cmd = 0;
 
   // torque
   standmode_output->joints_cmd.joint_h_pitch_l.torque_cmd = tau_cmd[static_cast<int>(y4a::Joints::left_hip_pitch_joint)];
@@ -166,8 +187,8 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
   double step_time_ns = step_duration.count();
   double step_time_ms = step_time_ns / 1000000;
 
-  ros_publisher->Publish("y4a/physics_robot/time/stand_mode_time_ms", call_time_ms);
-  ros_publisher->Publish("y4a/physics_robot/time/step_time_ms", step_time_ms);
+  // ros_publisher->Publish("y4a/physics_robot/time/stand_mode_time_ms", call_time_ms);
+  // ros_publisher->Publish("y4a/physics_robot/time/step_time_ms", step_time_ms);
 }
 
 void standMode_terminate(void) { return; }

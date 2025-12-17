@@ -87,16 +87,16 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
 
     class init_state(LeggedRobotCfg.init_state):
 
-        pos = [0.0, 0.0, 0.710]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
+        pos = [0.0, 0.0, 0.390]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
         rot = [0.0, 0.0, 0.0, 1.0]  # x,y,z,w [quat],base初始姿态
         default_joint_angles = {  # target angles when action = 0.0,各关节初始角度
             "left_hip_pitch_joint": -0.349,
             # "left_hip_roll_joint": 0.0,
-            "left_knee_joint": 0.542,
+            "left_knee_joint": 1.9,
             "left_wheel_joint": 0.0, 
             "right_hip_pitch_joint": -0.349, 
             # "right_hip_roll_joint": 0.0,  
-            "right_knee_joint": 0.542,  
+            "right_knee_joint": 1.9,  
             "right_wheel_joint": 0.0,
         }
 
@@ -110,8 +110,8 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
         heading_command = False  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
 
         class ranges: # 定义了每个命令可以取值的范围
-            lin_vel_x = [-0.5, 0.5]  # min max [m/s],线速度命令范围
-            ang_vel_yaw = [-0.2, 0.2] # 角速度命令范围
+            lin_vel_x = [-0, 0]  # min max [m/s],线速度命令范围
+            ang_vel_yaw = [-0, 0] # 角速度命令范围
             height = [0.40, 0.47, 0.70, 0.720]  # 高度范围上下浮动3cm
             mode = [1, 1]  # 0为四轮模式，1为两轮
             heading = [-3.14, 3.14] # 朝向范围
@@ -220,16 +220,16 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
 
             # 速度跟踪
-            tracking_lin_vel = 1
-            tracking_lin_vel_enhance = 1
-            tracking_ang_vel = 1
+            # tracking_lin_vel = 0.001
+            # tracking_lin_vel_enhance = 0.001
+            # tracking_ang_vel = 0.001
 
             # 姿态控制
             base_height = 1 # 基座高度
-            lin_vel_z = -2.0 # 惩罚z轴速度
-            orientation = 1 # 基座重力投影方向
+            # lin_vel_z = -2.0 # 惩罚z轴速度
+            # orientation = 1 # 基座重力投影方向
             # base_euler = 1
-            leg_end_x_diff = 1 # 两条腿不要叉开
+            # leg_end_x_diff = 1 # 两条腿不要叉开
 
 
             # 轮与地面接触
@@ -238,14 +238,17 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
             # wheel_contact_force_equal = 0.01 # 两腿地面反力相同
 
             # 机器人姿态柔顺性
-            ang_vel_xy = -0.05
+            # ang_vel_xy = -0.05
 
             # 机器人关节柔顺性
             dof_vel = -0.05
+            # dof_vel = -0.0005
             dof_acc = -2.5e-7
             torques = -2e-7 #-0.0001
             action_rate = -0.05
             action_smooth = -0.05
+            # action_rate = -0.0005
+            # action_smooth = -0.0005
 
             # 机器人关节限制
             dof_pos_limits = -1.0

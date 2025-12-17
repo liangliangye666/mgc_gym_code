@@ -126,7 +126,7 @@ class RL {
 
   //
   YAML::Node config_;
-  std::shared_ptr<ROS::Publisher> ros_publisher_;
+  // std::shared_ptr<ROS::Publisher> ros_publisher_;
 };
 
 }  // namespace y4a

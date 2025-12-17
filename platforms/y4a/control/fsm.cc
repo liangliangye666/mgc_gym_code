@@ -51,8 +51,8 @@ void FSM::Run(RobotModel& robot_model) {
 bool FSM::CheckSafety(RobotModel& robot_model) {
   std::vector<Limits> joint_limits = {
       {AllJoints::left_hip_pitch_joint, -2.35, 3.05, -16, 16, -85, 85}, {AllJoints::left_knee_joint, -0.33, 2.1, -14, 14, -120, 120},
-      {AllJoints::left_wheel_joint, -1000, 1000, -15, 15, -150, 150},   {AllJoints::right_hip_pitch_joint, -2.35, 3.05, -16, 16, -85, 85},
-      {AllJoints::right_knee_joint, -0.33, 2.1, -14, 14, -120, 120},    {AllJoints::right_wheel_joint, -1000, 1000, -15, 15, -150, 150}};
+      {AllJoints::left_wheel_joint, -1000, 1000, -15, 15, -60, 60},   {AllJoints::right_hip_pitch_joint, -2.35, 3.05, -16, 16, -85, 85},
+      {AllJoints::right_knee_joint, -0.33, 2.1, -14, 14, -120, 120},    {AllJoints::right_wheel_joint, -1000, 1000, -15, 15, -60, 60}};
 
   for (const auto& limit : joint_limits) {
     int index = static_cast<int>(limit.joint);
