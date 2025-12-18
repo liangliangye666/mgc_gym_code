@@ -79,8 +79,6 @@ void RL::InferenceLoop() {
   while (!should_stop_) {
     // 等待推理请求
     Eigen::VectorXd obs, obs_hist, est_latent_hist, cmd;
-    // Eigen::VectorXd priv_latent = Eigen::VectorXd::Zero(num_priv_);
-    // Eigen::VectorXd scan_latent = Eigen::VectorXd::Zero(num_scan_);
     Eigen::Vector3d base_vel;
 
     {
@@ -161,30 +159,6 @@ void RL::InferenceLoop() {
 }
 
 void RL::Run(RobotModel& robot_model) {
-  // double forward_or_back = robot_model.joystick()->forward_or_back();
-  // double left_or_right = robot_model.joystick()->left_or_right();
-
-  // if (robot_model.joystick()->forward_pad() && !last_forward_pad_) {
-  //   forward_back_error_ += 0.05;
-  // }
-  // if (robot_model.joystick()->back_pad() && !last_back_pad_) {
-  //   forward_back_error_ -= 0.05;
-  // }
-  // if (robot_model.joystick()->left_pad() && !last_left_pad_) {
-  //   left_right_error_ += 0.01;
-  // }
-  // if (robot_model.joystick()->right_pad() && !last_right_pad_) {
-  //   left_right_error_ -= 0.01;
-  // }
-
-  // forward_back_error_ = std::clamp(forward_back_error_, -1.0, 1.0);
-  // left_right_error_ = std::clamp(left_right_error_, -1.0, 1.0);
-
-  // last_forward_pad_ = robot_model.joystick()->forward_pad();
-  // last_back_pad_ = robot_model.joystick()->back_pad();
-  // last_left_pad_ = robot_model.joystick()->left_pad();
-  // last_right_pad_ = robot_model.joystick()->right_pad();
-
   // 基坐标系的机身线速度和角速度
   Eigen::Vector3d base_vel = robot_model.qdot.segment(0, 3);
   Eigen::Vector3d base_omega = robot_model.qdot.segment(3, 3);
@@ -193,6 +167,8 @@ void RL::Run(RobotModel& robot_model) {
   Eigen::VectorXd pos = robot_model.q_rpy.tail(robot_model.pino_model().nv - 6);
   // Eigen::VectorXd vel = robot_model.qdot.tail(robot_model.pino_model().nv - 6);
   Eigen::VectorXd vel = robot_model.joint_vel_;
+  vel[static_cast<int>(Joints::left_wheel_joint)] = robot_model.qdot[static_cast<int>(Joints::left_wheel_joint) + 6];
+  vel[static_cast<int>(Joints::right_wheel_joint)] = robot_model.qdot[static_cast<int>(Joints::right_wheel_joint) + 6];
 
   Eigen::Vector3d base_euler = robot_model.ori_base_world_.euler;
 
@@ -206,8 +182,8 @@ void RL::Run(RobotModel& robot_model) {
   for (int i = 3; i < 7; i++) {
     obs_[i] = robot_model.q_pino[i] * obs_scales_quat_;  // quat
   }
-  obs_[7] = robot_model.vel_des_ * obs_scales_lin_vel_;
-  obs_[8] = robot_model.omega_des_ * obs_scales_ang_vel_;
+  obs_[7] = 0.5*robot_model.vel_des_ * obs_scales_lin_vel_;
+  obs_[8] = (robot_model.omega_des_ - 0.5) * obs_scales_ang_vel_;
   obs_[9] = 0.71 * 12.0;
   obs_[10] = 1;
   obs_[11] = pos[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_pos_;
@@ -223,6 +199,35 @@ void RL::Run(RobotModel& robot_model) {
   obs_[20] = vel[static_cast<int>(Joints::right_wheel_joint)] * obs_scales_dof_vel_;
   obs_.segment(21, 6) = actions_;
   obs_ = obs_.cwiseMin(clip_obs_).cwiseMax(-clip_obs_);
+
+  robot_model.observed_value[7] = obs_[0];
+  robot_model.observed_value[8] = obs_[1];
+  robot_model.observed_value[9] = obs_[2];
+  robot_model.observed_value[10] = obs_[3];
+  robot_model.observed_value[11] = obs_[4];
+  robot_model.observed_value[12] = obs_[5];
+  robot_model.observed_value[13] = obs_[6];
+  robot_model.observed_value[14] = obs_[7];
+  robot_model.observed_value[15] = obs_[8];
+  robot_model.observed_value[16] = obs_[9];
+
+  robot_model.observed_value[17] = obs_[10];
+  robot_model.observed_value[18] = obs_[11];
+  robot_model.observed_value[19] = obs_[12];
+  robot_model.observed_value[20] = obs_[13];
+  robot_model.observed_value[21] = obs_[14];
+  robot_model.observed_value[22] = obs_[15];
+  robot_model.observed_value[23] = obs_[16];
+  robot_model.observed_value[24] = obs_[17];
+  robot_model.observed_value[25] = obs_[18];
+  robot_model.observed_value[26] = obs_[19];
+  robot_model.observed_value[27] = obs_[20];
+
+  robot_model.observed_value[28] = robot_model.vel_des_;
+  robot_model.observed_value[29] = robot_model.omega_des_;
+
+
+
 
   if (iter >= decimation_) {
     // 更新共享数据以触发新的推理

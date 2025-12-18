@@ -75,24 +75,24 @@ void SetParameters(standmode_output_t* standmode_output, standmode_input_t* stan
   standmode_output->joints_cmd.joint_w_pitch_r.enable = 1;
 
   // 设置模式：操作模式为1是位置模式，3是速度模式，4是力矩模式，11是力位混合模式
-  // standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 4;
-  // standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 1;
-  // standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 4;
-  // standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 4;
-
-  // standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 4;
-  // standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 1;
-  // standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 4;
-  // standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 4;
-  standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 1;
+  standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 4;
   standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 1;
-  standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 1;
-  standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 3;
+  standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 4;
+  standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 4;
 
-  standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 1;
+  standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 4;
   standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 1;
-  standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 1;
-  standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 3;
+  standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 4;
+  standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 4;
+  // standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 1;
+  // standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 1;
+  // standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 1;
+  // standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 3;
+
+  // standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 1;
+  // standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 1;
+  // standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 1;
+  // standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 3;
 }
 
 void standMode_step(standmode_output_t* standmode_output, standmode_input_t* standmode_input) {
@@ -127,8 +127,8 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
   tau_gravity << -0.037, -13.015, 0.0, -0.037, -13.015, 0.0;
   qDes << -0.349, 0.542, 0.0, -0.349, 0.542, 0.0;
   qdotDes << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-  kp << 200.0, 200.0, 0.0, 200.0, 200.0, 0.0;
-  kd << 5.0, 4.0, 4.0, 5.0, 4.0, 4.0;
+  kp << 100.0, 100.0, 0.0, 100.0, 100.0, 0.0;
+  kd << 1.0, 0.8, 1.0, 1.0, 0.8, 1.0;
 
   if (ctlSigs.rl_run && !isCtrl) {
     isCtrl = true;
@@ -151,20 +151,21 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
     robot_model.observed_value[4] = tau_cmd[3];
     robot_model.observed_value[5] = tau_cmd[4];
     robot_model.observed_value[6] = tau_cmd[5];
+    std::cout << "fsm is running!" << std::endl;
   } else {
     tau_cmd << tau_joint;
     pos_cmd = qDes;
     vel_cmd = qdotDes;
   }
 
-  standmode_output->joints_cmd.joint_h_pitch_l.pos_cmd = -0.349;
-  standmode_output->joints_cmd.joint_h_pitch_r.pos_cmd = -0.349;
+  // standmode_output->joints_cmd.joint_h_pitch_l.pos_cmd = -0.349;
+  // standmode_output->joints_cmd.joint_h_pitch_r.pos_cmd = -0.349;
   standmode_output->joints_cmd.joint_h_roll_l.pos_cmd = 0;
   standmode_output->joints_cmd.joint_h_roll_r.pos_cmd = 0;
-  standmode_output->joints_cmd.joint_k_pitch_l.pos_cmd = 0.542;
-  standmode_output->joints_cmd.joint_k_pitch_r.pos_cmd = 0.542;
-  standmode_output->joints_cmd.joint_w_pitch_l.vel_cmd = 0;
-  standmode_output->joints_cmd.joint_w_pitch_r.vel_cmd = 0;
+  // standmode_output->joints_cmd.joint_k_pitch_l.pos_cmd = 0.542;
+  // standmode_output->joints_cmd.joint_k_pitch_r.pos_cmd = 0.542;
+  // standmode_output->joints_cmd.joint_w_pitch_l.vel_cmd = 0;
+  // standmode_output->joints_cmd.joint_w_pitch_r.vel_cmd = 0;
 
   // torque
   standmode_output->joints_cmd.joint_h_pitch_l.torque_cmd = tau_cmd[static_cast<int>(y4a::Joints::left_hip_pitch_joint)];
