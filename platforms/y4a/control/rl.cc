@@ -165,10 +165,10 @@ void RL::Run(RobotModel& robot_model) {
 
   // 关节位置和速度
   Eigen::VectorXd pos = robot_model.q_rpy.tail(robot_model.pino_model().nv - 6);
-  // Eigen::VectorXd vel = robot_model.qdot.tail(robot_model.pino_model().nv - 6);
-  Eigen::VectorXd vel = robot_model.joint_vel_;
-  vel[static_cast<int>(Joints::left_wheel_joint)] = robot_model.qdot[static_cast<int>(Joints::left_wheel_joint) + 6];
-  vel[static_cast<int>(Joints::right_wheel_joint)] = robot_model.qdot[static_cast<int>(Joints::right_wheel_joint) + 6];
+  Eigen::VectorXd vel = robot_model.qdot.tail(robot_model.pino_model().nv - 6);
+  // Eigen::VectorXd vel = robot_model.joint_vel_;
+  // vel[static_cast<int>(Joints::left_wheel_joint)] = robot_model.qdot[static_cast<int>(Joints::left_wheel_joint) + 6];
+  // vel[static_cast<int>(Joints::right_wheel_joint)] = robot_model.qdot[static_cast<int>(Joints::right_wheel_joint) + 6];
 
   Eigen::Vector3d base_euler = robot_model.ori_base_world_.euler;
 
