@@ -11,8 +11,9 @@
 #include <cmath>
 
 std::string urdf_path = "/sim/model/y4a/urdf/y4aurdf20250827.urdf";
-// static std::shared_ptr<ROS::Publisher> ros_publisher;
-// static std::thread spin_thread;
+y4a::RobotModel robot_model(urdf_path);
+y4a::FSM fsm(robot_model);
+bool isCtrl = false;
 
 double call_time_ms = 0.0;  // Initialize time_ms to 0.0
 double flag = 0;
@@ -25,40 +26,17 @@ struct CtlSigs {
 };  // 控制信号
 CtlSigs ctlSigs{0.0, 0.0, false};
 void handleSigs_processing(standmode_output_t* standmode_output, const standmode_input_t* standmode_input, CtlSigs* ctlSigs, y4a::FSM* fsm);
-
+float updateWithSmartBrake(float current, float target, float a_up, float a_down, float dt);
 
 void DisplayObservedValue(standmode_output_t* standmode_output, const Eigen::VectorXd& observed_value);
 
 void standMode_initialize(standmode_output_t* standmode_output, standmode_input_t* standmode_input) {
   FLAGS_logtostderr = 1;
   FLAGS_colorlogtostderr = 1;
-
-  // int argc = 0;
-  // char** argv = nullptr;
-  // try {
-  //   rclcpp::init(argc, argv);
-  //   std::cout << "ROS initialized successfully in standMode_step" << std::endl;
-
-  //   // Get SimPublisher instance
-  //   ros_publisher = ROS::Publisher::getInstance();
-
-  //   // Launch ROS spin thread
-  //   spin_thread = std::thread(
-  //       [](std::shared_ptr<ROS::Publisher> node) {
-  //         try {
-  //           rclcpp::spin(node);
-  //         } catch (const std::exception& e) {
-  //           std::cerr << "Exception in spin thread: " << e.what() << std::endl;
-  //         }
-  //       },
-  //       ros_publisher);
-
-  //   spin_thread.detach();  // 设置线程为分离模式
-  // } catch (const std::exception& e) {
-  //   std::cerr << "Error during ROS initialization: " << e.what() << std::endl;
-  //   return;
-  // }
-
+  robot_model.Initialize();
+  fsm.Initialize(robot_model);
+  ctlSigs.rl_run = false;
+  isCtrl = false;
   return;
 }
 
@@ -105,19 +83,17 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
 
   SetParameters(standmode_output, standmode_input);
 
-  static y4a::RobotModel robot_model(urdf_path);
   robot_model.UpdateRealJointStates(standmode_output, standmode_input);
-  static y4a::FSM fsm(robot_model);
   robot_model.UpdateModel();
   handleSigs_processing(standmode_output, standmode_input, &ctlSigs, &fsm);  // 手柄信号处理
-  robot_model.vel_des_ = ctlSigs.vel_des;
+  robot_model.vel_des_ = updateWithSmartBrake(robot_model.vel_des_, ctlSigs.vel_des, 0.5, 1.5, robot_model.control_dt);
+  // robot_model.vel_des_ = ctlSigs.vel_des;
   robot_model.omega_des_ = ctlSigs.omega_des;
   Eigen::VectorXd tau_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
   Eigen::VectorXd pos_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
   Eigen::VectorXd vel_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
   Eigen::VectorXd tau_joint = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
 
-  static bool isCtrl = false;
   Eigen::VectorXd tau_gravity = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
   Eigen::VectorXd tau_fsm = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
   Eigen::VectorXd kp = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
@@ -151,7 +127,7 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
     robot_model.observed_value[4] = tau_cmd[3];
     robot_model.observed_value[5] = tau_cmd[4];
     robot_model.observed_value[6] = tau_cmd[5];
-    std::cout << "fsm is running!" << std::endl;
+    // std::cout << "fsm is running!" << std::endl;
   } else {
     tau_cmd << tau_joint;
     pos_cmd = qDes;
@@ -342,4 +318,39 @@ void DisplayObservedValue(standmode_output_t* standmode_output, const Eigen::Vec
   // standmode_output->observed_value.channel_78 = observed_value[78];//78通道控制支撑架
   standmode_output->observed_value.channel_79 = observed_value[79];
   standmode_output->observed_value.channel_80 = observed_value[80];
+}
+
+float updateWithSmartBrake(float current, float target, float a_up, float a_down, float dt) {
+  float dv = target - current;
+  float step;
+
+  // 情况 1：符号不同（异号），说明要先刹到 0
+  if (current * target < 0) {
+    // 强制把目标临时设为 0，用大减速度逼近
+    float dv0 = 0 - current;
+    step = a_down * dt;
+
+    if (fabs(dv0) <= step) {
+      return 0.0f;  // 到零
+    } else {
+      return current + step * (dv0 > 0 ? 1 : -1);
+    }
+  }
+
+  // 情况 2：符号相同
+  if (fabs(target) > fabs(current)) {
+    // 加速
+    step = a_up * dt;
+  } else if (fabs(target) < fabs(current)) {
+    // 减速
+    step = a_down * dt;
+  } else {
+    return target;
+  }
+
+  if (fabs(dv) <= step) {
+    return target;
+  } else {
+    return current + step * (dv > 0 ? 1 : -1);
+  }
 }

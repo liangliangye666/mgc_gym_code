@@ -57,7 +57,8 @@ void MyController(const mjModel* m, mjData* d) {
   robot_model.UpdateMujocoJointStates(m, d);
   robot_model.UpdateModel();
   static y4a::FSM fsm(robot_model);
-  robot_model.vel_des_ = -0;
+  robot_model.vel_des_ = -0.1;
+  robot_model.omega_des_ = 0.0;
 
   fsm.Run(robot_model);
   Eigen::VectorXd tau_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6); // 初始化力矩命令向量

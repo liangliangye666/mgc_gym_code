@@ -245,7 +245,6 @@ class Y4A_2WHEEL(LeggedRobot):
         self.last_dof_vel[:] = self.dof_vel[:]
         # 更新上一次的base速度_inWorld
         self.last_root_vel[:] = self.root_states[:, 7:13]
-        self.last_base_height = self.base_height.clone()
 
         # 如果启用了调试可视化，则绘制调试可视化
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
@@ -988,8 +987,6 @@ class Y4A_2WHEEL(LeggedRobot):
             self.height_points = self._init_height_points()
         self.measured_heights = 0
         self.base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1) # base高度
-        self.last_base_height = self.base_height.clone()
-        self.kneeling_height = self.base_height.clone()
         self.base_height_local = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)
 
         self.joint_indices = torch.tensor(list(self.cfg.asset.joint_indices), device=self.device) # 关节索引
@@ -1441,20 +1438,13 @@ class Y4A_2WHEEL(LeggedRobot):
 
 ################## 位姿控制 ##################
     def _reward_base_height(self):
-        height = self.base_height
-        height_min = self.kneeling_height
-        height_target = 0.710
-        raw_progress = torch.clamp((height - height_min) / (height_target - height_min), 0, 1)
-        # print("height,height_min,height_pro: ", height, height_min, raw_progress)
-        delta_height = self.base_height - self.last_base_height
-        raw_delta = torch.clamp(delta_height*100, -1.0, 1.0)
-        raw_delta *= (raw_progress < 0.6).float()
-        return raw_progress + 2*raw_delta
-    
-    def _reward_no_spin(self):
-        return -torch.square(self.base_ang_vel[:, 2])
-
-
+        # Penalize base height away from target
+        if self.reward_scales["base_height"] < 0:
+            return torch.abs(self.base_height - self.commands[:, 2])
+        else:
+            base_height_error = torch.square(self.base_height - self.commands[:, 2])
+            ans = torch.exp(-base_height_error / 0.01)
+        return ans
     def _reward_ang_vel_xy(self):
         # Penalize xy axes base angular velocity
         return torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)

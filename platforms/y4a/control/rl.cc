@@ -24,6 +24,8 @@ RL::RL(RobotModel& robot_model) {
 
   forward_back_error_ = 0.0;
   left_right_error_ = 0.0;
+  lin_vel_com_ = 0.0;
+  omega_com_ = 0.0;
 
   kp_joints_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);
   kd_joints_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);
@@ -182,8 +184,15 @@ void RL::Run(RobotModel& robot_model) {
   for (int i = 3; i < 7; i++) {
     obs_[i] = robot_model.q_pino[i] * obs_scales_quat_;  // quat
   }
-  obs_[7] = 0.5*robot_model.vel_des_ * obs_scales_lin_vel_;
-  obs_[8] = (robot_model.omega_des_ - 0.5) * obs_scales_ang_vel_;
+#if SIM_ENABLE
+  obs_[7] = robot_model.vel_des_ * obs_scales_lin_vel_;
+  // obs_[8] = (robot_model.omega_des_ - 0.5) * obs_scales_ang_vel_;
+  obs_[8] = robot_model.omega_des_ * obs_scales_ang_vel_;
+#else
+  obs_[7] = (robot_model.vel_des_ + lin_vel_com_) * obs_scales_lin_vel_;
+  // obs_[8] = (robot_model.omega_des_ - 0.5) * obs_scales_ang_vel_;
+  obs_[8] = (robot_model.omega_des_ + omega_com_) * obs_scales_ang_vel_;
+#endif
   obs_[9] = 0.71 * 12.0;
   obs_[10] = 1;
   obs_[11] = pos[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_pos_;
@@ -371,6 +380,8 @@ void RL::LoadParameters() {
   model_est_ = config_["model"]["estimator"].as<std::string>();
   model_ctrl_ = config_["model"]["controller"].as<std::string>();
   model_scan_encoder_ = config_["model"]["scan_encoder"].as<std::string>();
+  lin_vel_com_ = config_["lin_vel_com"].as<double>();
+  omega_com_ = config_["omega_com"].as<double>();
 }
 
 void RL::WarmUpModels() {

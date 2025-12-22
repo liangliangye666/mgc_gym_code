@@ -32,10 +32,8 @@ RobotModel::RobotModel(std::string urdf_path) {
   pinocchio::urdf::buildModel(urdf_filename, pino_model_fixed_);
   pino_data_fixed_ = pinocchio::Data(pino_model_fixed_);
   joint_vel_est_ = std::make_unique<JointVelEstimator>(pino_model_.nv - 6, 0.005);
-  fsm_id_ = 0;
   control_dt = 0.005;  // default control dt
-  vel_des_ = 0;
-  omega_des_ = 0;
+
   observed_value = Eigen::VectorXd::Zero(81);
   Initialize();
 
@@ -67,6 +65,8 @@ void RobotModel::Initialize() {
 
   S.block(0, 6, pino_model_.nv - 6, pino_model_.nv - 6) = Eigen::MatrixXd::Identity(pino_model_.nv - 6, pino_model_.nv - 6);
   S_transpose_pinv = (S * S.transpose()).inverse() * S;
+  vel_des_ = 0;
+  omega_des_ = 0;
 
   R_HW = Eigen::Matrix3d::Identity();
   R_WH = Eigen::Matrix3d::Identity();

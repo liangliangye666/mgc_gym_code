@@ -178,9 +178,6 @@ class RobotModel {
   double yaw_offset_;
   bool yaw_offset_initialized_ = false;
 
-  // fsm id
-  int fsm_id_;
-
 #if PHYSICS_ENABLE
   standmode_output_t* standmode_output_;
   standmode_input_t* standmode_input_;

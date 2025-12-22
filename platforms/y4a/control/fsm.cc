@@ -16,7 +16,10 @@ FSM::FSM(RobotModel& robot_model) {
 
 FSM::~FSM() {}
 
-void FSM::Initialize(RobotModel& robot_model) {}
+void FSM::Initialize(RobotModel& robot_model) {
+  EDamp_signal_ = false;
+  tau_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);
+}
 
 void FSM::Run(RobotModel& robot_model) {
   auto start = std::chrono::high_resolution_clock::now();
@@ -26,16 +29,18 @@ void FSM::Run(RobotModel& robot_model) {
   } else {
     fsm_id_ = static_cast<int>(FsmId::RlEDamp);
   }
-
+  std::cout << "fsm_id: " << fsm_id_ << std::endl;
   switch (fsm_id_) {
     case static_cast<int>(FsmId::Rl):
       rl_->Run(robot_model);
       tau_ = rl_->tau();
+      std::cout << "1" << std::endl;
       break;
 
     case static_cast<int>(FsmId::RlEDamp):
       rl_->RunEDamp(robot_model);
       tau_ = rl_->tau();
+      std::cout << "2" << std::endl;
       break;
 
     default:

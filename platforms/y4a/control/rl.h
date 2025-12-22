@@ -107,6 +107,8 @@ class RL {
   double obs_scales_dof_vel_;
   double obs_scales_quat_;
   double obs_scales_height_;
+  double lin_vel_com_;
+  double omega_com_;
 
   // rl actions scale
   double action_scales_pos_, action_scales_vel_;
