@@ -87,16 +87,16 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
 
     class init_state(LeggedRobotCfg.init_state):
 
-        pos = [0.0, 0.0, 0.710]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
+        pos = [0.0, 0.0, 0.390]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
         rot = [0.0, 0.0, 0.0, 1.0]  # x,y,z,w [quat],base初始姿态
         default_joint_angles = {  # target angles when action = 0.0,各关节初始角度
             "left_hip_pitch_joint": -0.349,
             # "left_hip_roll_joint": 0.0,
-            "left_knee_joint": 0.542,
+            "left_knee_joint": 1.9,
             "left_wheel_joint": 0.0, 
             "right_hip_pitch_joint": -0.349, 
             # "right_hip_roll_joint": 0.0,  
-            "right_knee_joint": 0.542,  
+            "right_knee_joint": 1.9,  
             "right_wheel_joint": 0.0,
         }
 
@@ -112,9 +112,16 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
         class ranges: # 定义了每个命令可以取值的范围
             lin_vel_x = [-1.5, 1.5]  # min max [m/s],线速度命令范围
             ang_vel_yaw = [-1.0, 1.0] # 角速度命令范围
-            height = [0.40, 0.47, 0.70, 0.720]  # 高度范围上下浮动3cm
+            height = [0.42, 0.48]  # 高度范围[跪姿-站立-站立下阈值-站立上阈值]
             mode = [1, 1]  # 0为四轮模式，1为两轮
             heading = [-3.14, 3.14] # 朝向范围
+         # 高度阶段表
+        HEIGHT_CURRICULUM = [
+            (0, 0.45, 0.42, 0.48),
+            (1, 0.55, 0.52, 0.58),
+            (2, 0.65, 0.62, 0.68),
+            (3, 0.71, 0.70, 0.72),
+        ]
 
     class control(LeggedRobotCfg.control):
         # 位置动作的缩放系数
@@ -231,26 +238,22 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
             # base_euler = 1
             leg_end_x_diff = 1 # 两条腿不要叉开
 
-
-            # 轮与地面接触
-            # wheel_contact_force = 1 # 1 #-1e-3 # 两前轮与地面接触,两后轮与地面分离
-            # back_wheel_contact = -0.1 #-0.1 # 两后轮与地面分离
-            # wheel_contact_force_equal = 0.01 # 两腿地面反力相同
-
-            # 机器人姿态柔顺性
-            ang_vel_xy = -0.05
+            # # 机器人姿态柔顺性
+            # ang_vel_xy = -0.05
 
             # 机器人关节柔顺性
-            dof_vel = -0.05
+            # dof_vel = -0.05
+            # action_rate = -0.05
+            # action_smooth = -0.05
+            dof_vel = -0.0005
+            action_rate = -0.0005
+            action_smooth = -0.0005
             dof_acc = -2.5e-7
             torques = -2e-7 #-0.0001
-            action_rate = -0.05
-            action_smooth = -0.05
+           
 
             # 机器人关节限制
             dof_pos_limits = -1.0
-            # dof_vel_limits = -0.001
-            # torque_limits = -0.001
             
             # 碰撞惩罚
             collision = -1.0

@@ -786,7 +786,7 @@ class LeggedRobot(BaseTask):
                 self.cfg.commands.advanced_max_curriculum,
             )
         if self.cfg.terrain.curriculum == False: # 如果没有启用课程学习
-            if ( # 检查机器人线速度和角速度跟踪奖励率是否大于阈值,超过阈值则条则和功能命令范围
+            if ( # 检查机器人线速度和角速度跟踪奖励率是否大于阈值,超过阈值则调节功能命令范围
                 torch.mean(self.episode_sums["tracking_lin_vel"][env_ids]) / self.max_episode_length
                 > self.cfg.commands.curriculum_threshold * self.reward_scales["tracking_lin_vel"]
                 and torch.mean(self.episode_sums["tracking_ang_vel"][env_ids]) / self.max_episode_length
