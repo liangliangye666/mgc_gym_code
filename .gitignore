@@ -13,3 +13,5 @@
 **/torch
 *.bak
 third_party/x86/pcl/
+./logs
+./wheel_legged_gym/envs
