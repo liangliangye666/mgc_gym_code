@@ -43,8 +43,7 @@ import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor
 class cmd:
     vel_x = 0
     vel_yaw = 0
-    mode = 1
-    height = 0.45 * (1 - mode) + 0.71 * mode
+    height = 0.55
     heading = 0
 
 
@@ -214,16 +213,15 @@ def run_mujoco(policy, cfg):
         obs[0, 7] = cmd.vel_x * cfg.normalization.obs_scales.lin_vel
         obs[0, 8] = cmd.vel_yaw * cfg.normalization.obs_scales.ang_vel
         obs[0, 9] = cmd.height * cfg.normalization.obs_scales.height_measurements
-        obs[0, 10] = cmd.mode * cfg.normalization.obs_scales.mode
 
-        obs[0, 11:13] = q[:2] * cfg.normalization.obs_scales.dof_pos
-        obs[0, 13:15] = q[3:5] * cfg.normalization.obs_scales.dof_pos
-        obs[0, 15:21] = dq * cfg.normalization.obs_scales.dof_vel
-        obs[0, 21:27] = action
+        obs[0, 10:12] = q[:2] * cfg.normalization.obs_scales.dof_pos
+        obs[0, 12:14] = q[3:5] * cfg.normalization.obs_scales.dof_pos
+        obs[0, 14:20] = dq * cfg.normalization.obs_scales.dof_vel
+        obs[0, 20:26] = action
 
-        obs[0,27]=v[0]
-        obs[0,28]=v[1]
-        obs[0,29]=v[2]
+        obs[0,26]=v[0]
+        obs[0,27]=v[1]
+        obs[0,28]=v[2]
         # obs[0,34:37]=base_euler_zyx
 
         obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
@@ -280,8 +278,8 @@ if __name__ == "__main__":
             decimation = 2 # 设置控制频率与仿真频率的比值为10,即每隔10步执行一次控制策略
 
         class robot_config:
-            kps = np.array([40, 60, 0, 40, 60, 0], dtype=np.double)
-            kds = np.array([4, 6, 5, 4, 6, 5], dtype=np.double)
+            kps = np.array([20, 30, 0, 20, 30, 0], dtype=np.double)
+            kds = np.array([2, 3, 2, 2, 3, 2], dtype=np.double)
             # tau_limit = np.array([300, 300, 60, 60, 300, 300, 60, 60], dtype=np.double)
             tau_limit = np.array([745, 460, 400, 745, 460, 400], dtype=np.double)
             # tau_limit = 800.0 * np.ones(8, dtype=np.double)  # 力矩限制

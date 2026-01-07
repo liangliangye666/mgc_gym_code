@@ -30,6 +30,9 @@ class FSM {
   void Run(RobotModel& robot_model);
   bool CheckSafety(RobotModel& robot_model);
   Eigen::VectorXd tau() { return tau_; }
+  Eigen::VectorXd pos() { return pos_; }
+  Eigen::VectorXd pos_fb_kp_;
+  Eigen::VectorXd pos_fb_kd_;
 
 #if SIM_ENABLE
   std::shared_ptr<ROS::Publisher> ros_publisher_;
@@ -45,7 +48,8 @@ class FSM {
 
   std::shared_ptr<RL> rl_;
 
-  Eigen::VectorXd tau_;
+  Eigen::VectorXd tau_; //力矩命令
+  Eigen::VectorXd pos_; //位置命令
 };
 
 }  // namespace y4a

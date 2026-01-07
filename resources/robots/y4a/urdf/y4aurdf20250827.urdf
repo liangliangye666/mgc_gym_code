@@ -287,8 +287,8 @@ Stephen Brawner (brawner@gmail.com)
     <limit
     lower="-10000000"
     upper="10000000"
-    effort="192"
-    velocity="17.017" />
+    effort="60"
+    velocity="15.603" />
   </joint>
   <link
     name="right_hip_pitch_link">
@@ -520,7 +520,7 @@ Stephen Brawner (brawner@gmail.com)
       <limit
     lower="-10000000"
     upper="10000000"
-    effort="192"
-    velocity="17.017" />
+    effort="60"
+    velocity="15.603" />
   </joint>
 </robot>

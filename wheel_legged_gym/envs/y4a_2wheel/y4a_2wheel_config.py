@@ -38,7 +38,7 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
     class env(LeggedRobotCfg.env):
         num_envs = 4096  # 4096,设置并行训练的环境数量,在仿真中会同时运行此数量的独立实例
         num_actions = 6 # 每个环境中机器人的动作空间维度,通常对应于机器人的关节数量
-        num_observations = 3 + 4 + 4 + 2 + 2 + num_actions*2  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
+        num_observations = 3 + 4 + 3 + 2 + 2 + num_actions*2  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
         num_privileged_obs = 3 + 3 + num_observations + 3 + num_actions*4 + 7 * 11 + 3 + 1 * 3 + 6 # 特权观测,评论家网络输入
         obs_history_length = 5  # number of observations stacked together,状态观测历史堆叠的长度
         obs_history_dec = 1 # 状态历史堆叠的衰减参数,当前时刻权重最高,这里设置为1说明没有衰减
@@ -87,41 +87,37 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
 
     class init_state(LeggedRobotCfg.init_state):
 
-        pos = [0.0, 0.0, 0.390]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
-        rot = [0.0, 0.0, 0.0, 1.0]  # x,y,z,w [quat],base初始姿态
+        pos = [0.0, 0.0, 0.37086]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
+        rot = [0.0, -0.34202, 0.0, 0.93969]  # x,y,z,w [quat],base初始姿态
         default_joint_angles = {  # target angles when action = 0.0,各关节初始角度
-            "left_hip_pitch_joint": -0.349,
+            "left_hip_pitch_joint": 0.3491,
             # "left_hip_roll_joint": 0.0,
-            "left_knee_joint": 1.9,
+            "left_knee_joint": 1.88,
             "left_wheel_joint": 0.0, 
-            "right_hip_pitch_joint": -0.349, 
+            "right_hip_pitch_joint": 0.3491, 
             # "right_hip_roll_joint": 0.0,  
-            "right_knee_joint": 1.9,  
+            "right_knee_joint": 1.88,  
             "right_wheel_joint": 0.0,
         }
 
     class commands(LeggedRobotCfg.commands):
         curriculum = False  # True,是否使用课程学习
-        basic_max_curriculum = 2.5 # 不同阶段的课程学习的难度值
-        advanced_max_curriculum = 1.5 # 高级阶段的最大课程难度值
+        basic_max_curriculum = 1.5 # 不同阶段的课程学习的难度值
+        advanced_max_curriculum = 2 # 高级阶段的最大课程难度值
         curriculum_threshold = 0.7 # 课程学习的阈值
-        num_commands = 5 # 命令的数量
+        num_commands = 4 # 命令的数量
         resampling_time = 10.0  # time before command are changed[s],重新采样命令的时间间隔
         heading_command = False  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
 
         class ranges: # 定义了每个命令可以取值的范围
-            lin_vel_x = [-1.5, 1.5]  # min max [m/s],线速度命令范围
+            lin_vel_x = [-1.0, 1.0]  # min max [m/s],线速度命令范围
             ang_vel_yaw = [-1.0, 1.0] # 角速度命令范围
-            height = [0.42, 0.48]  # 高度范围[跪姿-站立-站立下阈值-站立上阈值]
-            mode = [1, 1]  # 0为四轮模式，1为两轮
+            # height = [0.70, 0.72]  # 高度范围[跪姿-站立-站立下阈值-站立上阈值]
+            height = [0.43, 0.48]  # 高度范围[跪姿-站立-站立下阈值-站立上阈值]
+            # mode = [1, 1]  # 0为四轮模式，1为两轮
             heading = [-3.14, 3.14] # 朝向范围
-         # 高度阶段表
-        HEIGHT_CURRICULUM = [
-            (0, 0.45, 0.42, 0.48),
-            (1, 0.55, 0.52, 0.58),
-            (2, 0.65, 0.62, 0.68),
-            (3, 0.71, 0.70, 0.72),
-        ]
+        base_max_height = 0.70
+        base_min_height = 0.55
 
     class control(LeggedRobotCfg.control):
         # 位置动作的缩放系数
@@ -148,7 +144,7 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
         joint_link_indices = [1, 2, 4, 5]
         wheel_link_indices = [3, 6]
         penalize_contacts_on = ["right_hip", "right_knee", "base", "left_hip", "left_knee"] # 惩罚区域
-        terminate_after_contacts_on = ["base"] # 终止区域
+        terminate_after_contacts_on = ["base", "right_knee", "left_knee"] # 终止区域
         self_collisions = 1  # 1 to disable, 0 to enable...bitwise filter,控制机器人自身各部分之间是否能够发生碰撞检测
         flip_visual_attachments = False # 设置是否反转视觉附件
 
@@ -233,27 +229,33 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
 
             # 姿态控制
             base_height = 1 # 基座高度
-            lin_vel_z = -2.0 # 惩罚z轴速度
+            # stand_up = 1
+            # lin_vel_z = -2.0 # 惩罚z轴速度
             orientation = 1 # 基座重力投影方向
             # base_euler = 1
             leg_end_x_diff = 1 # 两条腿不要叉开
 
-            # # 机器人姿态柔顺性
-            # ang_vel_xy = -0.05
 
-            # 机器人关节柔顺性
-            # dof_vel = -0.05
-            # action_rate = -0.05
-            # action_smooth = -0.05
-            dof_vel = -0.0005
-            action_rate = -0.0005
-            action_smooth = -0.0005
+            # 轮与地面接触
+            wheel_contact = 1 # 1 #-1e-3 # 两前轮与地面接触,两后轮与地面分离
+            # back_wheel_contact = -0.1 #-0.1 # 两后轮与地面分离
+            # wheel_contact_force_equal = 0.01 # 两腿地面反力相同
+
+            # # 机器人姿态柔顺性
+            ang_vel_xy = -0.05
+
+            # # 机器人关节柔顺性
+            dof_vel = -0.05
+            dof_vel_wheel = -0.001
             dof_acc = -2.5e-7
             torques = -2e-7 #-0.0001
-           
+            action_rate = -0.1
+            action_smooth = -0.05
 
             # 机器人关节限制
-            dof_pos_limits = -1.0
+            dof_pos_limits = -1e7
+            dof_vel_limits = -1.0
+            torque_limits = -1.0
             
             # 碰撞惩罚
             collision = -1.0
@@ -270,10 +272,10 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
         tracking_sigma = 0.25
 
         # 关节位置的软限制，作为关节的百分比限制（超过此限制值的关节位置将受惩罚）
-        soft_dof_pos_limit = 0.97
+        soft_dof_pos_limit = 0.95
 
         # 关节速度的软限制（超过此速度限制将受到惩罚）
-        soft_dof_vel_limit = 1.0
+        soft_dof_vel_limit = 0.9
 
         # 扭矩的软限制（超过此扭矩限制将受到惩罚）
         soft_torque_limit = 0.9

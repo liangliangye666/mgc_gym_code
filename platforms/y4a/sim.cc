@@ -57,12 +57,15 @@ void MyController(const mjModel* m, mjData* d) {
   robot_model.UpdateMujocoJointStates(m, d);
   robot_model.UpdateModel();
   static y4a::FSM fsm(robot_model);
-  robot_model.vel_des_ = -0.1;
+  robot_model.vel_des_ = -0.0;
   robot_model.omega_des_ = 0.0;
 
   fsm.Run(robot_model);
+  Eigen::VectorXd pos_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6); // 初始化力矩命令向量
   Eigen::VectorXd tau_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6); // 初始化力矩命令向量
   tau_cmd = fsm.tau();
+  pos_cmd = fsm.pos();
+
   // std::cout << "tau_cmd: " << tau_cmd << std::endl;
   for (size_t i = 0; i < robot_model.pino_model().nv-6; i++) {
     d->ctrl[i] = tau_cmd[i];

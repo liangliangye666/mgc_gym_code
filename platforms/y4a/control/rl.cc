@@ -5,7 +5,7 @@ RL::RL(RobotModel& robot_model) {
   // FLAGS_logtostderr = 1;
   // FLAGS_colorlogtostderr = 1;
 
-  num_obs_ = 27;                                   // 观测值数目,输入到actor网络
+  num_obs_ = 26;                                   // 观测值数目,输入到actor网络
   num_actions_ = robot_model.pino_model().nv - 6;  // 自由度数目,输出到电机执行
   hist_len_ = 5;                                   // 历史观测长度,输入到critic和actor网络
   num_est_ = 3;                                    // 估计状态数目,输入到critic和actor网络
@@ -29,6 +29,8 @@ RL::RL(RobotModel& robot_model) {
 
   kp_joints_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);
   kd_joints_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);
+  pos_fb_kp_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);
+  pos_fb_kd_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);
 
   // 初始化共享数据
   shared_data_.obs = Eigen::VectorXd::Zero(num_obs_);
@@ -193,20 +195,19 @@ void RL::Run(RobotModel& robot_model) {
   // obs_[8] = (robot_model.omega_des_ - 0.5) * obs_scales_ang_vel_;
   obs_[8] = (robot_model.omega_des_ + omega_com_) * obs_scales_ang_vel_;
 #endif
-  obs_[9] = 0.71 * 12.0;
-  obs_[10] = 1;
-  obs_[11] = pos[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_pos_;
-  obs_[12] = pos[static_cast<int>(Joints::left_knee_joint)] * obs_scales_dof_pos_;
-  obs_[13] = pos[static_cast<int>(Joints::right_hip_pitch_joint)] * obs_scales_dof_pos_;
-  obs_[14] = pos[static_cast<int>(Joints::right_knee_joint)] * obs_scales_dof_pos_;
+  obs_[9] = 0.55 * 12.0;
+  obs_[10] = pos[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_pos_;
+  obs_[11] = pos[static_cast<int>(Joints::left_knee_joint)] * obs_scales_dof_pos_;
+  obs_[12] = pos[static_cast<int>(Joints::right_hip_pitch_joint)] * obs_scales_dof_pos_;
+  obs_[13] = pos[static_cast<int>(Joints::right_knee_joint)] * obs_scales_dof_pos_;
   // 关节速度
-  obs_[15] = vel[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_vel_;
-  obs_[16] = vel[static_cast<int>(Joints::left_knee_joint)] * obs_scales_dof_vel_;
-  obs_[17] = vel[static_cast<int>(Joints::left_wheel_joint)] * obs_scales_dof_vel_;
-  obs_[18] = vel[static_cast<int>(Joints::right_hip_pitch_joint)] * obs_scales_dof_vel_;
-  obs_[19] = vel[static_cast<int>(Joints::right_knee_joint)] * obs_scales_dof_vel_;
-  obs_[20] = vel[static_cast<int>(Joints::right_wheel_joint)] * obs_scales_dof_vel_;
-  obs_.segment(21, 6) = actions_;
+  obs_[14] = vel[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_vel_;
+  obs_[15] = vel[static_cast<int>(Joints::left_knee_joint)] * obs_scales_dof_vel_;
+  obs_[16] = vel[static_cast<int>(Joints::left_wheel_joint)] * obs_scales_dof_vel_;
+  obs_[17] = vel[static_cast<int>(Joints::right_hip_pitch_joint)] * obs_scales_dof_vel_;
+  obs_[18] = vel[static_cast<int>(Joints::right_knee_joint)] * obs_scales_dof_vel_;
+  obs_[19] = vel[static_cast<int>(Joints::right_wheel_joint)] * obs_scales_dof_vel_;
+  obs_.segment(20, 6) = actions_;
   obs_ = obs_.cwiseMin(clip_obs_).cwiseMax(-clip_obs_);
 
   robot_model.observed_value[7] = obs_[0];
@@ -361,6 +362,10 @@ void RL::LoadParameters() {
                                     config_["control"]["pd_controller"]["kp"].as<std::vector<double>>().size());
   kd_joints_ = Eigen::VectorXd::Map(config_["control"]["pd_controller"]["kd"].as<std::vector<double>>().data(),
                                     config_["control"]["pd_controller"]["kd"].as<std::vector<double>>().size());
+  pos_fb_kp_ = Eigen::VectorXd::Map(config_["control"]["pos_fb_controller"]["kp"].as<std::vector<double>>().data(),
+                                    config_["control"]["pos_fb_controller"]["kp"].as<std::vector<double>>().size());
+  pos_fb_kd_ = Eigen::VectorXd::Map(config_["control"]["pos_fb_controller"]["kd"].as<std::vector<double>>().data(),
+                                    config_["control"]["pos_fb_controller"]["kd"].as<std::vector<double>>().size());
   // 访问数据
   obs_scales_lin_vel_ = config_["obs_scales"]["lin_vel"].as<double>();
   obs_scales_ang_vel_ = config_["obs_scales"]["ang_vel"].as<double>();

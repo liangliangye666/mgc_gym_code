@@ -1611,25 +1611,25 @@ class L2C_2WHEEL(LeggedRobot):
 
     #     return ans
 
-    def _reward_wheel_contact_force(self):
-     # 获取索引
-        # 计算 reward_mode_0
-        contact_force_front = self.contact_forces[:, self.feet_indices[[0, 2]], -1]
-        contact_force_rear = self.contact_forces[:, self.feet_indices[[1, 3]], -1]
-        ans_contact_front_l = torch.zeros(self.num_envs, device=self.device)
-        ans_contact_front_r = torch.zeros(self.num_envs, device=self.device)
-        ans_contact_rear_l = torch.zeros(self.num_envs, device=self.device)
-        ans_contact_rear_r = torch.zeros(self.num_envs, device=self.device)
-        sign_0 = torch.where(contact_force_front[:,0] > 0)
-        sign_1 = torch.where(contact_force_rear[:,0] < 0)
-        sign_2 = torch.where(contact_force_front[:,1] > 0)
-        sign_3 = torch.where(contact_force_rear[:,1] < 0)
-        ans_contact_front_r[sign_0] = 1
-        ans_contact_front_l[sign_2] = 1
-        ans_contact_rear_r[sign_1] = 1
-        ans_contact_rear_l[sign_3] = 1
-        ans = torch.sum(ans_contact_front_l+ans_contact_front_r+ans_contact_rear_l+ans_contact_rear_r) / 4
-        return ans
+    # def _reward_wheel_contact_force(self):
+    #  # 获取索引
+    #     # 计算 reward_mode_0
+    #     contact_force_front = self.contact_forces[:, self.feet_indices[[0, 2]], -1]
+    #     contact_force_rear = self.contact_forces[:, self.feet_indices[[1, 3]], -1]
+    #     ans_contact_front_l = torch.zeros(self.num_envs, device=self.device)
+    #     ans_contact_front_r = torch.zeros(self.num_envs, device=self.device)
+    #     ans_contact_rear_l = torch.zeros(self.num_envs, device=self.device)
+    #     ans_contact_rear_r = torch.zeros(self.num_envs, device=self.device)
+    #     sign_0 = torch.where(contact_force_front[:,0] > 0)
+    #     sign_1 = torch.where(contact_force_rear[:,0] < 0)
+    #     sign_2 = torch.where(contact_force_front[:,1] > 0)
+    #     sign_3 = torch.where(contact_force_rear[:,1] < 0)
+    #     ans_contact_front_r[sign_0] = 1
+    #     ans_contact_front_l[sign_2] = 1
+    #     ans_contact_rear_r[sign_1] = 1
+    #     ans_contact_rear_l[sign_3] = 1
+    #     ans = torch.sum(ans_contact_front_l+ans_contact_front_r+ans_contact_rear_l+ans_contact_rear_r) / 4
+    #     return ans
     
     def _reward_wheel_contact_force_equal(self):
         contact_force_left = self.contact_forces[:, self.feet_indices[0], -1]

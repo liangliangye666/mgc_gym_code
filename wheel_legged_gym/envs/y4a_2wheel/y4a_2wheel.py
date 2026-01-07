@@ -86,7 +86,6 @@ class Y4A_2WHEEL(LeggedRobot):
         # 裁剪动作以确保其在允许的范围内
         clip_actions = self.cfg.normalization.clip_actions
         self.actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
-
         # 渲染当前帧
         self.render()
 
@@ -180,6 +179,8 @@ class Y4A_2WHEEL(LeggedRobot):
         # 更新通用步骤计数器,该变量从不重置,持续累加直到训练结束
         self.common_step_counter += 1
 
+        # 
+        self.base_position[:] = self.root_states[:, 0:3]
         # 准备基座的四元数
         self.base_quat[:] = self.root_states[:, 3:7]
 
@@ -210,7 +211,7 @@ class Y4A_2WHEEL(LeggedRobot):
         # 使用轮子速度作为机器人线速度,使用轮子差速作为机器人角速度
         self.wheel_lin_vel = torch.sum(self.dof_vel[:, self.wheel_indices[[0, 1]]], dim=1) * 0.1 * 0.5
         self.wheel_ang_vel = (
-            (self.dof_vel[:, self.wheel_indices[1]] - self.dof_vel[:, self.wheel_indices[0]]) * 0.1 / (0.164*2)
+            (self.dof_vel[:, self.wheel_indices[1]] - self.dof_vel[:, self.wheel_indices[0]]) * 0.1 / (0.1*2)
         )
 
         # 计算基座坐标系下两个轮的位置和姿态
@@ -320,7 +321,7 @@ class Y4A_2WHEEL(LeggedRobot):
         # avoid updating command curriculum at each step since the maximum command is common to all envs
         if self.cfg.commands.curriculum and (self.common_step_counter % self.max_episode_length == 0): # 每个回合更新一次
             self.update_command_curriculum(env_ids)
-        if self.cfg.commands.curriculum and (self.common_step_counter % self.max_episode_length == 0): # 每个回合更新一次
+        if (self.common_step_counter % self.max_episode_length == 0): # 每个回合更新10次
             self.update_height_curriculum(env_ids)
 
         # reset robot states
@@ -643,7 +644,7 @@ class Y4A_2WHEEL(LeggedRobot):
             # 计算当前方向的偏航角
             heading = torch.atan2(forward[:, 1], forward[:, 0])
             # 根据目标偏航角和当前偏航角计算角速度命令
-            self.commands[:, 1] = torch.clip(0.5 * wrap_to_pi(self.commands[:, 4] - heading), -1.0, 1.0)
+            self.commands[:, 1] = torch.clip(0.5 * wrap_to_pi(self.commands[:, 3] - heading), -1.0, 1.0)
 
         # 如果启用了测量地形高度，则计算并存储测量的地形高度
         if self.cfg.terrain.measure_heights:
@@ -651,77 +652,87 @@ class Y4A_2WHEEL(LeggedRobot):
         # 计算并存储机器人的平均高度,去掉地形高度的影响,squeeze删除维度,unsqueeze增加维度
         self.base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
 
+    # def _resample_commands(self, env_ids):
+    #     """Randommly select commands of some environments
+
+    #     Args:
+    #         env_ids (List[int]): Environments ids for which new commands are needed
+    #     """
+    #     self.commands[env_ids, 0] = self._sample_command(
+    #         self.command_ranges["lin_vel_x"],
+    #         env_ids,
+    #     )
+    #     if self.cfg.commands.heading_command:
+    #         self.commands[env_ids, 3] = self._sample_command(
+    #             self.command_ranges["heading"],
+    #             env_ids,
+    #         )
+    #     else:
+    #         self.commands[env_ids, 1] = self._sample_command(
+    #             self.command_ranges["ang_vel_yaw"],
+    #             env_ids,
+    #         )
+    #     self.commands[env_ids, 2] = self._sample_command(
+    #         self.command_ranges["height"],
+    #         env_ids,
+    #     )
+
     def _resample_commands(self, env_ids):
         """Randommly select commands of some environments
 
         Args:
             env_ids (List[int]): Environments ids for which new commands are needed
         """
-        self.commands[env_ids, 2] = torch_rand_float(
-            self.command_ranges["height"][0],
-            self.command_ranges["height"][1],
-            (len(env_ids), 1),
-            device=self.device,
-        ).squeeze(1)
+        # max_lvl = len(self.HEIGHT_CURRICULUM) - 1
 
-        self.commands[env_ids, 0] = torch_rand_float( # 线速度重采样
-            self.command_ranges["lin_vel_x"][0],
-            self.command_ranges["lin_vel_x"][1],
-            (len(env_ids), 1),
-            device=self.device,
-        ).squeeze(1)
+        # finished_mask = self.height_level[env_ids] >= max_lvl
+        # unfinished_mask = ~finished_mask
 
-        # randint high must > low
-        self.commands[env_ids, 3] = ( # 模式重采样,0-四轮模式,1-两轮模式
-            torch.randint(
-                self.command_ranges["mode"][0],
-                self.command_ranges["mode"][1] + 1,
-                (len(env_ids), 1),
-                device=self.device,
-            )
-            .float()
-            .squeeze(1)
+        # finished_env_ids = env_ids[finished_mask]
+        # unfinished_env_ids = env_ids[unfinished_mask]
+        # if len(finished_env_ids) > 0:
+        #     self.commands[finished_env_ids, 0] = self._sample_command(
+        #         self.command_ranges["lin_vel_x"],
+        #         finished_env_ids,
+        #     )
+        #     if self.cfg.commands.heading_command:
+        #         self.commands[finished_env_ids, 3] = self._sample_command(
+        #             self.command_ranges["heading"],
+        #             finished_env_ids,
+        #         )
+        #     else:
+        #         self.commands[finished_env_ids, 1] = self._sample_command(
+        #             self.command_ranges["ang_vel_yaw"],
+        #             finished_env_ids,
+        #         )
+        self.commands[env_ids, 0] = self._sample_command(
+            self.command_ranges["lin_vel_x"],
+            env_ids,
         )
-        self.wheel_mode = self.commands[:, 3].unsqueeze(-1) # 将模式信息单独存储,并增加一个维度
-
-        # # 1. 减少使用 torch.tensor 构造新张量，从 Python 列表直接构造是低效的。
-        # command_ranges_height = torch.as_tensor(self.command_ranges["height"], device=self.device) # 高度重采样
-        # # 分别提取分组范围
-        # low = command_ranges_height[0:2]
-        # high = command_ranges_height[2:4]
-
-        # # 2. 直接通过 torch.where 获取 height_ranges
-        # height_ranges = torch.where( # 如果是0,那么选择low,如果是1,那么选择high
-        #     self.commands[env_ids, 3].unsqueeze(-1) == 0,
-        #     low,  # 对应 self.command_ranges["height"][0:2]
-        #     high,  # 对应 self.command_ranges["height"][2:4]
-        # )
-
-        # 3. 提取索引和计算逻辑，将重复索引操作提取出来
-        # height_min, height_max = height_ranges.T  # [N, 0] -> height_min; [N, 1] -> height_max
-
-        # 随机生成新范围内的命令，并在一行联合运算
-        # self.commands[env_ids, 2] = (height_max - height_min) * torch.rand( # 高度命令重采样
-        #     len(env_ids), device=self.device
-        # ) + height_min
-
-
-        if self.cfg.commands.heading_command: # 如果有朝向命令,那么在第五个命令处随机化一个朝向值
-            self.commands[env_ids, 4] = torch_rand_float(
-                self.command_ranges["heading"][0],
-                self.command_ranges["heading"][1],
-                (len(env_ids), 1),
-                device=self.device,
-            ).squeeze(1)
+        if self.cfg.commands.heading_command:
+            self.commands[env_ids, 3] = self._sample_command(
+                self.command_ranges["heading"],
+                env_ids,
+            )
         else:
-            self.commands[env_ids, 1] = torch_rand_float( # 否则直接在第二个命令处随机化一个角速度值
-                self.command_ranges["ang_vel_yaw"][0],
-                self.command_ranges["ang_vel_yaw"][1],
-                (len(env_ids), 1),
-                device=self.device,
-            ).squeeze(1)
-        # set small commands to zero
-        # self.commands[env_ids, :1] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
+            self.commands[env_ids, 1] = self._sample_command(
+                self.command_ranges["ang_vel_yaw"],
+                env_ids,
+            )
+        self.commands[env_ids, 2] = self._sample_command(
+            self.command_ranges["height"],
+            env_ids,
+        )
+
+    def _sample_command(self, ranges, env_ids):
+        """
+        ranges: Tensor (num_envs, 2)
+        env_ids: Tensor (K,)
+        """
+        r = ranges[env_ids]
+        return r[:, 0] + (r[:, 1] - r[:, 0]) * torch.rand(
+            len(env_ids), device=self.device
+        )
 
     def compute_proprioception_observations(self):
         # note that observation noise need to modified accordingly !!!
@@ -730,7 +741,7 @@ class Y4A_2WHEEL(LeggedRobot):
                 # self.base_lin_vel * self.obs_scales.lin_vel, # 3, 机器人base线速度
                 self.base_ang_vel * self.obs_scales.ang_vel, # 3 ,机器人base角速度(在base坐标系)
                 self.base_quat_local * self.obs_scales.quat, # 4 ,机器人姿态四元数
-                self.commands[:, :4] * self.commands_scale,  # 4 , 外界命令
+                self.commands[:, :3] * self.commands_scale,  # 3 , 外界命令
                 self.dof_pos[:, :2] * self.obs_scales.dof_pos,  # 2 ,机器人关节位置,左边髋膝关节
                 self.dof_pos[:, 3:5] * self.obs_scales.dof_pos,  # 2 ,机器人关节位置,右边髋膝关节
                 self.dof_vel * self.obs_scales.dof_vel,  # 6 , 6个关节速度
@@ -837,11 +848,11 @@ class Y4A_2WHEEL(LeggedRobot):
         # noise_vec[24:30] = 0.0  # previous actions
         noise_vec[0:3] = noise_scales.ang_vel * noise_level * self.obs_scales.ang_vel  # ang_vel
         noise_vec[3:7] = noise_scales.quat * noise_level * self.obs_scales.quat  # quat
-        noise_vec[7:11] = 0.0  # commands
-        noise_vec[11:13] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos 
-        noise_vec[13:15] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos 
-        noise_vec[15:21] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel  # dof_vel_all
-        noise_vec[21:27] = 0.0  # previous actions
+        noise_vec[7:10] = 0.0  # commands
+        noise_vec[10:12] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos 
+        noise_vec[12:14] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos 
+        noise_vec[14:20] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel  # dof_vel_all
+        noise_vec[20:26] = 0.0  # previous actions
         return noise_vec
 
     # ----------------------------------------
@@ -931,7 +942,6 @@ class Y4A_2WHEEL(LeggedRobot):
             requires_grad=False,
         )
         self.base_position = self.root_states[:, :3] # 存储所有环境的位置
-        # print(self.base_position)
         self.last_base_position = self.base_position.clone() # 上一个时刻所有环境的位置
         self.last_dof_pos = torch.zeros_like(self.dof_pos) # 上一个时刻所有关节的位置
         self.last_dof_vel = torch.zeros_like(self.dof_vel) # 上一个时刻所有关节的速度
@@ -948,11 +958,46 @@ class Y4A_2WHEEL(LeggedRobot):
                 self.obs_scales.lin_vel,
                 self.obs_scales.ang_vel,
                 self.obs_scales.height_measurements,
-                self.obs_scales.mode,
+                # self.obs_scales.mode,
             ],
             device=self.device,
             requires_grad=False,
         )
+
+        self.command_ranges["lin_vel_x"] = torch.zeros( # 初始化x方向线速度的命令范围
+            self.num_envs,
+            2,
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
+        )
+        self.command_ranges["lin_vel_x"][:] = torch.tensor(self.cfg.commands.ranges.lin_vel_x)
+        self.command_ranges["ang_vel_yaw"] = torch.zeros( # 初始化yaw方向角速度命令范围
+            self.num_envs,
+            2,
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
+        )
+        self.command_ranges["ang_vel_yaw"][:] = torch.tensor(self.cfg.commands.ranges.ang_vel_yaw) 
+        self.command_ranges["height"] = torch.zeros( # 初始化高度命令范围
+            self.num_envs,
+            2,
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
+        )
+        self.command_ranges["height"][:] = torch.tensor(self.cfg.commands.ranges.height)
+        self.command_ranges["heading"] = torch.zeros( # 初始化高度命令范围
+            self.num_envs,
+            2,
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
+        )
+        self.command_ranges["heading"][:] = torch.tensor(self.cfg.commands.ranges.heading)
+
+
         self.last_contacts = torch.zeros( # 初始化上一个接触状态信息
             self.num_envs,
             len(self.feet_indices),
@@ -1091,30 +1136,47 @@ class Y4A_2WHEEL(LeggedRobot):
         self.rwd_linVelTrackEnhancedPrev = torch.zeros(self.num_envs, device=self.device)
         self.rwd_angVelTrackEnhancedPrev = torch.zeros(self.num_envs, device=self.device)
         # 站起课程学习变量初始化
-        self.height_level = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-        self.height_episode_success = torch.zeros(
-            self.num_envs, dtype=torch.bool, device=self.device)
-        self.HEIGHT_CURRICULUM = self.cfg.commands.HEIGHT_CURRICULUM
+        self.curriculum_window = 20
+        self.curriculum_window_count = 0
+        self.curriculum_window_count_last = 0
 
     def update_height_curriculum(self, env_ids):
-
-        mask = ( # 课程学习阈值0.7
-                self.episode_sums["base_height"][self.success_ids] / self.max_episode_length
-                > self.cfg.commands.curriculum_threshold * self.reward_scales["base_height"]
+        if self.cfg.terrain.curriculum and len(self.success_ids) != 0:
+            mask = ( # 课程学习阈值0.7
+                    self.episode_sums["base_height"][self.success_ids] / self.max_episode_length
+                    > self.cfg.commands.curriculum_threshold * self.reward_scales["base_height"]
+                )
+            success_ids = self.success_ids[mask]
+            # 成功环境 level +1
+            self.height_level[success_ids] = torch.clamp(
+                self.height_level[success_ids] + 1,
+                max=len(self.HEIGHT_CURRICULUM) - 1
             )
-        success_ids = self.success_ids[mask]
-        if len(success_ids) == 0:
-            return
-        # 成功环境 level +1
-        self.height_level[success_ids] = torch.clamp(
-            self.height_level[success_ids] + 1,
-            max=len(self.HEIGHT_CURRICULUM) - 1
-        )
-        # 重新采样成功环境的高度命令
-        for env_id in success_ids.tolist():
-            lvl = self.height_level[env_id].item()
-            _, _, height_min, height_max = self.HEIGHT_CURRICULUM[lvl]
-            self.command_ranges["height"][env_id] = torch.tensor([height_min, height_max],device=self.device)
+            # 重新采样成功环境的高度命令
+            for env_id in success_ids.tolist():
+                lvl = self.height_level[env_id].item()
+                _, _, height_min, height_max = self.HEIGHT_CURRICULUM[lvl]
+                self.command_ranges["height"][env_id] = torch.tensor([height_min, height_max],device=self.device)
+                # print("command_ranges:", self.command_ranges["height"][env_id])
+        if self.cfg.terrain.curriculum == False: # 如果没有启用课程学习
+            print("base_height_commands", self.command_ranges["height"])
+            avg_reward = self.episode_sums["base_height"][env_ids] / self.max_episode_length
+            success_mask = avg_reward > (self.cfg.commands.curriculum_threshold * self.reward_scales["base_height"])
+            success_rate = success_mask.float().mean()
+            print("success_mask:", success_mask)
+            print("success_rate:", success_rate)
+            if success_rate > 0.8:
+                self.command_ranges["height"][:, 1] = torch.clip(
+                    self.command_ranges["height"][:, 1] + 0.02,
+                    0.0,
+                    self.cfg.commands.base_max_height,
+                )
+                self.command_ranges["height"][:, 0] = torch.clip(
+                    self.command_ranges["height"][:, 0] + 0.02,
+                    0.0,
+                    self.cfg.commands.base_min_height,
+                )
+                print("update_base_height_commands", self.command_ranges["height"])
 
     def _prepare_reward_function(self):
         """准备一个奖励函数列表，这些函数将被调用以计算总奖励。
@@ -1424,7 +1486,10 @@ class Y4A_2WHEEL(LeggedRobot):
         # Tracking of linear velocity commands (x axes)
         lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0]) / 0.1
         ans = torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
-        return ans
+        height_mask = self.base_height > self.cfg.commands.base_min_height
+        rew = torch.zeros(self.num_envs, device=self.device)
+        rew[height_mask] = ans[height_mask]
+        return rew
 
     def _reward_tracking_lin_vel_enhance(self):
         # 计算期望线性速度与实际线性速度之间的误差
@@ -1437,19 +1502,22 @@ class Y4A_2WHEEL(LeggedRobot):
 
         # 计算期望线性速度与实际线性速度之间的误差
         lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0])
-        # lin_vel_error = torch.square(self.commands[:, 0] - self.wheel_lin_vel)
-        # ans = self.rwd_linVelTrackEnhancedPrev + self.cfg.rewards.enhance_factor * lin_vel_error
-        # # 使用指数函数计算奖励，奖励值随着误差的减小而增加
-        # return ans.clip(0, 1)  # Ensure the reward is non-negative
-        return torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma / 10) - 1
-        
+        ans = torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma / 10) - 1
+        height_mask = self.base_height > self.cfg.commands.base_min_height
+        rew = torch.zeros(self.num_envs, device=self.device)
+        rew[height_mask] = ans[height_mask]
+        return rew
+
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw)
         ang_vel_error = torch.square(self.commands[:, 1] - self.base_ang_vel[:, 2])
         # ang_vel_error = torch.square(self.commands[:, 1] - self.wheel_ang_vel)
         ans = torch.exp(-ang_vel_error / self.cfg.rewards.tracking_sigma)
-        return ans
+        height_mask = self.base_height > self.cfg.commands.base_min_height
+        rew = torch.zeros(self.num_envs, device=self.device)
+        rew[height_mask] = ans[height_mask]
+        return rew
 
     def _reward_tracking_ang_vel_enhance(self):
         # Tracking of angular velocity commands (x axes)
@@ -1467,7 +1535,7 @@ class Y4A_2WHEEL(LeggedRobot):
         delta_phi = ~self.reset_buf * (self._reward_tracking_ang_vel() - self.rwd_angVelTrackPrev)
         # return ang_vel_error
         return delta_phi
-
+    
 ################## 位姿控制 ##################
     def _reward_base_height(self):
         # Penalize base height away from target
@@ -1476,15 +1544,50 @@ class Y4A_2WHEEL(LeggedRobot):
         else:
             base_height_error = torch.square(self.base_height - self.commands[:, 2])
             ans = torch.exp(-base_height_error / 0.01)
+        return ans 
+
+    def _reward_stand_up(self):
+        h = self.base_height
+        h_cmd = self.commands[:, 2]
+
+        dz = self.base_position[:, 2] - self.last_base_position[:, 2]
+        height_vel = dz / self.dt / 0.0001
+
+        # -------------------------
+        # 1. 是否需要站起
+        # -------------------------
+        need_up = h < h_cmd + 0.02
+
+        # -------------------------
+        # 2. 向上奖励（仅在需要站起时）
+        # -------------------------
+        r_up = need_up * torch.clamp(height_vel, 0.0, 0.5)
+        # print("r_up", r_up)
+        # 4. 向下运动惩罚
+        # -------------------------
+        r_down = (h < h_cmd - 0.02) * torch.clamp(-height_vel, 0.0, 0.5)
+        # print("r_down", r_down)
+        ans = (0.5 * r_up -
+            0.5 * r_down
+        )
+        # print("ans", ans)
         return ans
+
+
     def _reward_ang_vel_xy(self):
         # Penalize xy axes base angular velocity
         return torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)
-    
+    # def _reward_lin_vel_z(self):
+    #     # Penalize z axis base linear velocity
+    #     return torch.square(self.base_lin_vel[:, 2])
+
     def _reward_lin_vel_z(self):
-        # Penalize z axis base linear velocity
-        return torch.square(self.base_lin_vel[:, 2])
-    
+        vel_z = torch.abs(self.base_lin_vel[:, 2])
+        threshold = 0.1  # 允许的z方向速度（m/s）
+        excess = torch.clamp(vel_z - threshold, min=0.0)
+        rew = excess ** 2
+        return rew
+
     def _reward_orientation(self):
         """
         计算保持基座平坦方向的奖励。使用基座欧拉角和投影重力向量来惩罚与期望基座方向的偏差。
@@ -1535,12 +1638,23 @@ class Y4A_2WHEEL(LeggedRobot):
 ################## 动作柔顺 ##################
     def _reward_dof_vel(self):
         # Penalize dof velocities
-        return torch.sum(torch.square(self.dof_vel[:, self.joint_indices]), dim=1)
+        ans = torch.sum(torch.square(self.dof_vel[:, self.joint_indices]), dim=1)
+        height_mask = self.base_height > self.cfg.commands.base_min_height
+        rew = torch.zeros(self.num_envs, device=self.device)
+        rew[height_mask] = ans[height_mask]
+        return rew
+    
+    def _reward_dof_vel_wheel(self):
+        # Penalize dof velocities
+        ans = torch.sum(torch.square(self.dof_vel[:, self.wheel_indices]), dim=1)
+        height_mask = self.base_height <= self.cfg.commands.base_min_height
+        rew = torch.zeros(self.num_envs, device=self.device)
+        rew[height_mask] = ans[height_mask]
+        return rew
 
     def _reward_dof_acc(self):
         # Penalize dof accelerations
         return torch.sum(torch.square(self.dof_acc[:, self.joint_indices]), dim=1)
-
     def _reward_torques(self):
         # Penalize torques
         # print("sum torques:", torch.sum(torch.square(self.torques), dim=1))
@@ -1559,17 +1673,36 @@ class Y4A_2WHEEL(LeggedRobot):
             torch.square(self.actions[:, self.joint_indices] + self.last_actions[:, self.joint_indices, 1] - 2 * self.last_actions[:, self.joint_indices, 0]), dim=1
         )
         return ans
-
 ################## 关节限制 ##################
     def _reward_dof_pos_limits(self):
         # Penalize dof positions too close to the limit
         dof_pos_subset = self.dof_pos[:, self.joint_indices]
         lower_limits = self.dof_pos_limits[self.joint_indices, 0]
         upper_limits = self.dof_pos_limits[self.joint_indices, 1]
-        lower_penalty = -(dof_pos_subset - lower_limits).clip(max=0.0)  # 下限惩罚
-        upper_penalty = (dof_pos_subset - upper_limits).clip(min=0.0)  # 上限惩罚
+        lower_penalty = -(dof_pos_subset - lower_limits * self.cfg.rewards.soft_dof_pos_limit).clip(max=0.0)  # 下限惩罚
+        upper_penalty = (dof_pos_subset - upper_limits * self.cfg.rewards.soft_dof_pos_limit).clip(min=0.0)  # 上限惩罚
         penalties = lower_penalty + upper_penalty
         return torch.sum(penalties, dim=1)
+    
+    def _reward_dof_vel_limits(self):
+        # Penalize dof velocities too close to the limit
+        # clip to max error = 1 rad/s per joint to avoid huge penalties
+        return torch.sum(
+            (torch.abs(self.dof_vel) / self.dof_vel_limits * self.cfg.rewards.soft_dof_vel_limit - 1.0).clip(
+                min=0.0, max=1.0
+            ),
+            dim=1,
+        )
+
+    def _reward_torque_limits(self):
+        # penalize torques too close to the limit
+        return torch.sum(
+            (torch.abs(self.torques) - self.torque_limits * self.cfg.rewards.soft_torque_limit).clip(min=0.0, max=1.0),
+            dim=1,
+        )
+
+
+
     
 ################## 碰撞惩罚 ##################
     def _reward_collision(self):
@@ -1578,6 +1711,7 @@ class Y4A_2WHEEL(LeggedRobot):
             1.0 * (torch.norm(self.contact_forces[:, self.penalised_contact_indices, :], dim=-1) > 0.1),
             dim=1,
         )
+    
     
 
 
@@ -1624,26 +1758,6 @@ class Y4A_2WHEEL(LeggedRobot):
     #     # Terminal reward / penalty
     #     return self.reset_buf * ~self.time_out_buf
 
-
-
-    # def _reward_dof_vel_limits(self):
-    #     # Penalize dof velocities too close to the limit
-    #     # clip to max error = 1 rad/s per joint to avoid huge penalties
-    #     return torch.sum(
-    #         (torch.abs(self.dof_vel) - self.dof_vel_limits * self.cfg.rewards.soft_dof_vel_limit).clip(
-    #             min=0.0, max=1.0
-    #         ),
-    #         dim=1,
-    #     )
-
-    # def _reward_torque_limits(self):
-    #     # penalize torques too close to the limit
-    #     return torch.sum(
-    #         (torch.abs(self.torques) - self.torque_limits * self.cfg.rewards.soft_torque_limit).clip(min=0.0, max=1.0),
-    #         dim=1,
-    #     )
-
-
     # def _reward_wheel_vel_lb_diff(self):
     #     # 获取索引
     #     idx_mode_0 = (self.wheel_mode == 0).squeeze(-1).nonzero(as_tuple=True)[0] # 以元组形式返回,并取元组第一个元素
@@ -1677,17 +1791,17 @@ class Y4A_2WHEEL(LeggedRobot):
     #     ans = leg_ang_l + leg_ang_r
     #     return ans
 
-    # def _reward_back_wheel_contact(self):
-    #     # 获取索引
-    #     idx_mode_0 = (self.wheel_mode == 0).squeeze(-1).nonzero(as_tuple=True)[0]
-    #     idx_mode_1 = (self.wheel_mode == 1).squeeze(-1).nonzero(as_tuple=True)[0]
-
-    #     contact = self.contact_forces[:, self.feet_indices[[1, 3]], -1] # 后轮z向接触力
-
-    #     # 构造 ans 并赋值
-    #     ans = torch.zeros(self.wheel_mode.size(0), device=self.device)
-    #     ans[idx_mode_0] = torch.sum(10 - contact[idx_mode_0], dim=1)
-    #     ans[idx_mode_1] = torch.sum(contact[idx_mode_1] - 10, dim=1)
+    # def _reward_wheel_contact_force(self):
+    #  # 获取索引
+    #     # 计算 reward_mode_0
+    #     contact_force_front = self.contact_forces[:, self.feet_indices[[0, 1]], -1]
+    #     ans_contact_front_l = torch.zeros(self.num_envs, device=self.device)
+    #     ans_contact_front_r = torch.zeros(self.num_envs, device=self.device)
+    #     sign_0 = torch.where(contact_force_front[:,0] > 10)
+    #     sign_1 = torch.where(contact_force_front[:,1] > 10)
+    #     ans_contact_front_l[sign_0] = 1
+    #     ans_contact_front_r[sign_1] = 1
+    #     ans = torch.sum(ans_contact_front_l+ans_contact_front_r) / 2
     #     return ans
 
     # def _reward_low_speed(self):

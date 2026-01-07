@@ -121,11 +121,10 @@ def play(args):
 
         env.commands[:, 0] = 0.0  # lin_vel
         env.commands[:, 1] = 0  # ang_vel
-        env.commands[:, 2] = 0.71  # height
-        env.commands[:, 3] = 1  # 0 是四轮 1 是两轮
-        env.commands[:, 4] = 0
+        env.commands[:, 2] = 0.55  # height
+        env.commands[:, 3] = 0
 
-        if i > 300 & i<=1500:
+        if i > 300 and i<=1500:
             vel_cmd[:] = env.commands[:, 0] * np.clip((i - 300) * 0.05, 0, 1)
         else:
             vel_cmd[:] = 0
@@ -165,8 +164,7 @@ def play(args):
                 "dof_torque": env.torques[robot_index, env.joint_indices].cpu().detach().numpy(),
                 "command_yaw": env.commands[robot_index, 1].item(),
                 "command_height": env.commands[robot_index, 2].item(),
-                "command_mode": env.commands[robot_index, 3].item(),
-                "command_heading": env.commands[robot_index, 4].item(),
+                "command_heading": env.commands[robot_index, 3].item(),
                 "base_height": env.base_height[robot_index].item(),
                 "base_vel_x": env.base_lin_vel[robot_index, 0].item(),
                 # "base_vel_x": env.wheel_lin_vel[robot_index].item(),
