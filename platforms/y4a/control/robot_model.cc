@@ -104,7 +104,6 @@ void RobotModel::UpdateMujocoJointStates(const mjModel* m, mjData* d) {
   for (size_t i = 6; i < pino_model_.nv; i++) {
     q_rpy[i] = mj_data_->qpos[i + 1];
   }
-
   Eigen::Quaterniond quat_rpy = GacMath::RPYToQuaternion(q_rpy[3], q_rpy[4], q_rpy[5]);
 
   // q_pino = [global_base_position, global_base_quaternion, joint_positions]
@@ -119,9 +118,7 @@ void RobotModel::UpdateMujocoJointStates(const mjModel* m, mjData* d) {
   q_pino[6] = quat_rpy.w();  // w
   for (size_t i = 7; i < mj_model_->nq; i++) {
     q_pino[i] = mj_data_->qpos[i];
-    i++;
   }
-
   // Update R_HW
   R_WB = GacMath::EulerToRotationMatrix(q_rpy[5], q_rpy[4], q_rpy[3]);
   R_BW = R_WB.transpose();

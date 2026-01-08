@@ -1,4 +1,5 @@
 LICENSE
+README.md
 setup.py
 wheel_legged_gym/__init__.py
 wheel_legged_gym.egg-info/PKG-INFO

@@ -246,6 +246,7 @@ class Y4A_2WHEEL_Cfg(LeggedRobotCfg):
 
             # # 机器人关节柔顺性
             dof_vel = -0.05
+            dof_vel_low = -0.01
             dof_vel_wheel = -0.001
             dof_acc = -2.5e-7
             torques = -2e-7 #-0.0001

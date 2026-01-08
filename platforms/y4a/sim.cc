@@ -66,9 +66,26 @@ void MyController(const mjModel* m, mjData* d) {
   tau_cmd = fsm.tau();
   pos_cmd = fsm.pos();
 
-  // std::cout << "tau_cmd: " << tau_cmd << std::endl;
+  Eigen::VectorXd pos_init = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
+  Eigen::VectorXd vel_init = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
+  Eigen::VectorXd tau_init = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
+  pos_init << 0.3491, 1.88, 0, 0.3491, 1.88, 0;
+  tau_init = 2000*(pos_init - robot_model.q_fixed) + 50*(vel_init - robot_model.qdot.tail(robot_model.pino_model().nv-6));
+  tau_init[2] = 0;
+  tau_init[5] = 0;
+  // std::cout << "tau_init: " << tau_init << std::endl;
+  static int count = 0;
   for (size_t i = 0; i < robot_model.pino_model().nv-6; i++) {
-    d->ctrl[i] = tau_cmd[i];
+    // d->ctrl[i] = tau_cmd[i];
+    if(count <= 2000){
+      d->ctrl[i] = tau_init[i];
+      // std::cout << "tau_init:" << tau_init.transpose() << std::endl;
+    }else{
+      d->ctrl[i] = tau_cmd[i];
+      // std::cout << "tau_cmd:" << tau_cmd.transpose() << std::endl;
+      // std::cout << "pos_fixd:" << robot_model.q_fixed << std::endl;
+    }
+    count++;
   }
 }
 

@@ -1644,6 +1644,14 @@ class Y4A_2WHEEL(LeggedRobot):
         rew[height_mask] = ans[height_mask]
         return rew
     
+    def _reward_dof_vel_low(self):
+        # Penalize dof velocities
+        ans = torch.sum(torch.square(self.dof_vel[:, self.joint_indices]), dim=1)
+        height_mask = self.base_height <= self.cfg.commands.base_min_height
+        rew = torch.zeros(self.num_envs, device=self.device)
+        rew[height_mask] = ans[height_mask]
+        return rew
+    
     def _reward_dof_vel_wheel(self):
         # Penalize dof velocities
         ans = torch.sum(torch.square(self.dof_vel[:, self.wheel_indices]), dim=1)
@@ -1679,8 +1687,8 @@ class Y4A_2WHEEL(LeggedRobot):
         dof_pos_subset = self.dof_pos[:, self.joint_indices]
         lower_limits = self.dof_pos_limits[self.joint_indices, 0]
         upper_limits = self.dof_pos_limits[self.joint_indices, 1]
-        lower_penalty = -(dof_pos_subset - lower_limits * self.cfg.rewards.soft_dof_pos_limit).clip(max=0.0)  # 下限惩罚
-        upper_penalty = (dof_pos_subset - upper_limits * self.cfg.rewards.soft_dof_pos_limit).clip(min=0.0)  # 上限惩罚
+        lower_penalty = -(dof_pos_subset - lower_limits).clip(max=0.0)  # 下限惩罚
+        upper_penalty = (dof_pos_subset - upper_limits).clip(min=0.0)  # 上限惩罚
         penalties = lower_penalty + upper_penalty
         return torch.sum(penalties, dim=1)
     
