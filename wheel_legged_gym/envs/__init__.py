@@ -41,20 +41,14 @@ from .wheel_legged_vmc_flat.wheel_legged_vmc_flat_config import (
     WheelLeggedVMCFlatCfgPPO,
 )
 
-from .y1a_2wheel_vmc.y1a_2wheel_vmc import Y1A_2WHEEL_VMC
-from .y1a_2wheel_vmc.y1a_2wheel_vmc_config import (
-    Y1A_2WHEEL_VMCCfg,
-    Y1A_2WHEEL_VMCCfgPPO,
-)
-
-from .l2c_2wheel.l2c_2wheel import L2C_2WHEEL
-from .l2c_2wheel.l2c_2wheel_config import (
-    L2C_2WHEEL_Cfg,
-    L2C_2WHEEL_CfgPPO,
-)
-
 from .y4a_2wheel.y4a_2wheel import Y4A_2WHEEL
 from .y4a_2wheel.y4a_2wheel_config import (Y4A_2WHEEL_Cfg, Y4A_2WHEEL_CfgPPO,)
+
+from .y4b_2wheel.y4b_2wheel import Y4B_2WHEEL
+from .y4b_2wheel.y4b_2wheel_config import (
+    Y4B_2WHEEL_Cfg,
+    Y4B_2WHEEL_CfgPPO,
+)
 
 import os
 
@@ -78,21 +72,17 @@ task_registry.register(
     WheelLeggedVMCFlatCfg(),
     WheelLeggedVMCFlatCfgPPO(),
 )
-task_registry.register(
-    "y1a_2wheel_vmc",
-    Y1A_2WHEEL_VMC,
-    Y1A_2WHEEL_VMCCfg(),
-    Y1A_2WHEEL_VMCCfgPPO(),
-)
-task_registry.register(
-    "l2c_2wheel",
-    L2C_2WHEEL,
-    L2C_2WHEEL_Cfg(),
-    L2C_2WHEEL_CfgPPO(),
-)
+
 task_registry.register(
     "y4a_2wheel",
     Y4A_2WHEEL,
     Y4A_2WHEEL_Cfg(),
     Y4A_2WHEEL_CfgPPO(),
-    )
+)
+
+task_registry.register(
+    "y4b_2wheel",
+    Y4B_2WHEEL,
+    Y4B_2WHEEL_Cfg(),
+    Y4B_2WHEEL_CfgPPO(),
+)
