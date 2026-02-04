@@ -87,16 +87,16 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
 
     class init_state(LeggedRobotCfg.init_state):
 
-        pos = [0.0, 0.0, 0.737]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
+        pos = [0.0, 0.0, 0.667]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
         rot = [0.0, 0.0, 0.0, 1.0]  # x,y,z,w [quat],base初始姿态
         default_joint_angles = {  # target angles when action = 0.0,各关节初始角度
-            "left_hip_pitch_joint": -0.3491,
+            "left_hip_pitch_joint": -0.523599,
             "left_hip_roll_joint": 0.0,
-            "left_knee_joint": 0.5473,
+            "left_knee_joint": 0.833691,
             "left_wheel_joint": 0.0, 
-            "right_hip_pitch_joint": -0.3491, 
+            "right_hip_pitch_joint": -0.523599, 
             "right_hip_roll_joint": 0.0,  
-            "right_knee_joint": 0.5473,  
+            "right_knee_joint": 0.833691,  
             "right_wheel_joint": 0.0,
         }
 
@@ -110,10 +110,10 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         heading_command = False  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
 
         class ranges: # 定义了每个命令可以取值的范围
-            lin_vel_x = [-1.5, 1.5]  # min max [m/s],线速度命令范围
-            lin_vel_y = [-0.5, 0.5]
-            ang_vel_yaw = [-1.0, 1.0] # 角速度命令范围
-            height = [0.727, 0.747]  # 高度范围上下浮动3cm
+            lin_vel_x = [-0, 0]  # min max [m/s],线速度命令范围
+            lin_vel_y = [-1, 1]
+            ang_vel_yaw = [-0.0, 0.0] # 角速度命令范围
+            height = [0.70, 0.72]  # 高度范围上下浮动3cm
             heading = [-3.14, 3.14] # 朝向范围
 
     class control(LeggedRobotCfg.control):
@@ -124,9 +124,9 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
 
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip": 20.0, "knee": 30.0, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip": 100.0, "knee": 150.0, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip": 2, "knee": 3, "wheel": 5.0}  # [N*m*s/rad]
+        damping = {"hip": 10, "knee": 15, "wheel": 5.0}  # [N*m*s/rad]
 
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 2
@@ -140,6 +140,8 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         base_link_indices = [0]
         joint_link_indices = [1, 2, 3, 5, 6, 7]
         wheel_link_indices = [4, 8]
+        wheel_radius = 0.1
+        track_width = 0.166*2
         penalize_contacts_on = ["right_hip", "right_knee", "base", "left_hip", "left_knee"] # 惩罚区域
         terminate_after_contacts_on = ["base"] # 终止区域
         self_collisions = 1  # 1 to disable, 0 to enable...bitwise filter,控制机器人自身各部分之间是否能够发生碰撞检测
@@ -223,7 +225,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             # 速度跟踪
             tracking_lin_vel = 1
             tracking_lin_vel_enhance = 1
-            tracking_lin_vel_y = 1
+            tracking_lin_vel_y = 10
             tracking_ang_vel = 1
 
             # 姿态控制
@@ -232,8 +234,9 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             orientation = 1 # 基座重力投影方向
             # base_euler = 1
             leg_end_x_diff = 1 # 两条腿不要叉开
-
-
+            hip_pos = -0.1
+            contact = 20
+            feet_swing_height = -100
             # 轮与地面接触
             # wheel_contact_force = 1 # 1 #-1e-3 # 两前轮与地面接触,两后轮与地面分离
             # back_wheel_contact = -0.1 #-0.1 # 两后轮与地面分离
@@ -243,8 +246,8 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             ang_vel_xy = -0.05
 
             # 机器人关节柔顺性
-            dof_vel = -0.05
-            dof_acc = -2.5e-7
+            # dof_vel = -0.05         #-0.05
+            # dof_acc = -2.5e-7
             torques = -2e-7 #-0.0001
             action_rate = -0.05
             action_smooth = -0.05

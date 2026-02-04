@@ -1,37 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by
-Stephen Brawner (brawner@gmail.com) 
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
      Commit Version: 1.6.0-1-g15f4949  Build Version: 1.6.7594.29634
      For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
-
 <robot
   name="y4burdf20260114">
-
-  <mujoco>
+   <mujoco>
     <compiler meshdir="../meshes" discardvisual="false" balanceinertia="false" />
   </mujoco>
-
   <!-- <link name="world"></link>
   <joint name="base_joint" type="floating">
     <parent link="world" />
     <child link="base_link" />
   </joint> -->
-
   <link
     name="base_link">
     <inertial>
       <origin
-        xyz="0.0031866 0.0024622 0.077211"
+        xyz="-0.0017064 0.0025605 0.076642"
         rpy="0 0 0" />
       <mass
-        value="9.7803" />
+        value="9.3994" />
       <inertia
-        ixx="0.18381"
-        ixy="1.931E-05"
-        ixz="0.011015"
-        iyy="0.17379"
-        iyz="-0.00094559"
-        izz="0.03729" />
+        ixx=" 0.18352808"
+        ixy="-0.00011437"
+        ixz="0.01165993"
+        iyy="0.17253818"
+        iyz="-0.00095888"
+        izz="0.03609903" />
     </inertial>
     <visual>
       <origin
@@ -39,7 +34,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/base_link.STL" />
+          filename="package://y4burdf20260114/meshes/base_link.STL" />
       </geometry>
       <material
         name="">
@@ -53,7 +48,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/base_link.STL" />
+          filename="package://y4burdf20260114/meshes/base_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -66,12 +61,12 @@ Stephen Brawner (brawner@gmail.com)
       <mass
         value="1.801" />
       <inertia
-        ixx="0.0039907"
-        ixy="5.211E-05"
+        ixx="0.00399071"
+        ixy="0.00005211"
         ixz="0.00015616"
-        iyy="0.0028771"
-        iyz="1.133E-05"
-        izz="0.0031257" />
+        iyy="0.00287706"
+        iyz="0.00001133"
+        izz="0.00312565" />
     </inertial>
     <visual>
       <origin
@@ -79,7 +74,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/left_hip_pitch_link.STL" />
+          filename="package://y4burdf20260114/meshes/left_hip_pitch_link.STL" />
       </geometry>
       <material
         name="">
@@ -93,7 +88,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/left_hip_pitch_link.STL" />
+          filename="package://y4burdf20260114/meshes/left_hip_pitch_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -124,12 +119,12 @@ Stephen Brawner (brawner@gmail.com)
       <mass
         value="3.1782" />
       <inertia
-        ixx="0.044826"
-        ixy="-1.66E-05"
-        ixz="-0.0018788"
-        iyy="0.046243"
+        ixx="0.04482595"
+        ixy="-0.00001660"
+        ixz="-0.00187883"
+        iyy="0.04624297"
         iyz="-0.00017433"
-        izz="0.005502" />
+        izz="0.00550201" />
     </inertial>
     <visual>
       <origin
@@ -137,7 +132,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/left_hip_roll_link.STL" />
+          filename="package://y4burdf20260114/meshes/left_hip_roll_link.STL" />
       </geometry>
       <material
         name="">
@@ -151,13 +146,14 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/left_hip_roll_link.STL" />
+          filename="package://y4burdf20260114/meshes/left_hip_roll_link.STL" />
       </geometry>
     </collision>
   </link>
   <joint
     name="left_hip_roll_joint"
-      type="revolute">
+        type="revolute">
+        <!-- type="fixed"> -->
     <origin
       xyz="0.03048 0.08605 0.0053744"
       rpy="0 -0.17453 0" />
@@ -182,12 +178,12 @@ Stephen Brawner (brawner@gmail.com)
       <mass
         value="1.5128" />
       <inertia
-        ixx="0.024367"
+        ixx="0.02436664"
         ixy="-0.00020283"
-        ixz="-0.0044602"
-        iyy="0.025409"
-        iyz="-0.0011184"
-        izz="0.0029116" />
+        ixz="-0.00446020"
+        iyy="0.02540933"
+        iyz="-0.00111835"
+        izz="0.00291159" />
     </inertial>
     <visual>
       <origin
@@ -195,7 +191,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/left_knee_link.STL" />
+          filename="package://y4burdf20260114/meshes/left_knee_link.STL" />
       </geometry>
       <material
         name="">
@@ -209,7 +205,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/left_knee_link.STL" />
+          filename="package://y4burdf20260114/meshes/left_knee_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -235,17 +231,17 @@ Stephen Brawner (brawner@gmail.com)
     name="left_wheel_link">
     <inertial>
       <origin
-        xyz="-3.395E-05 0.024484 -1.108E-05"
+        xyz="0 0.041825 0"
         rpy="0 0 0" />
       <mass
-        value="0.94045" />
+        value="1.432" />
       <inertia
-        ixx="0.0023021"
-        ixy="-1E-07"
-        ixz="1.1E-07"
-        iyy="0.0043825"
-        iyz="-4E-08"
-        izz="0.0023019" />
+        ixx="0.00667054"
+        ixy="0"
+        ixz="0"
+        iyy="0.01217"
+        iyz="0"
+        izz="0.00667054" />
     </inertial>
     <visual>
       <origin
@@ -253,12 +249,12 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/left_wheel_link.STL" />
+          filename="package://y4burdf20260114/meshes/left_wheel_link.STL" />
       </geometry>
       <material
         name="">
         <color
-          rgba="0.86667 0.86667 0.8902 1" />
+          rgba="0.89804 0.91765 0.92941 1" />
       </material>
     </visual>
     <collision>
@@ -267,7 +263,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/left_wheel_link.STL" />
+          filename="package://y4burdf20260114/meshes/left_wheel_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -284,10 +280,10 @@ Stephen Brawner (brawner@gmail.com)
     <axis
       xyz="0 1 0" />
     <limit
-    lower="-10000000"
-    upper="10000000"
-    effort="60"
-    velocity="15.603" />
+      lower="-10000000"
+      upper="10000000"
+      effort="60"
+      velocity="15.603" />
   </joint>
   <link
     name="right_hip_pitch_link">
@@ -298,12 +294,12 @@ Stephen Brawner (brawner@gmail.com)
       <mass
         value="1.8053" />
       <inertia
-        ixx="0.0039992"
-        ixy="-5.173E-05"
+        ixx="0.00399920"
+        ixy="-0.00005173"
         ixz="0.00015498"
-        iyy="0.0028718"
-        iyz="-1.736E-05"
-        izz="0.0031397" />
+        iyy="0.00287175"
+        iyz="-0.00001736"
+        izz="0.00313965" />
     </inertial>
     <visual>
       <origin
@@ -311,7 +307,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/right_hip_pitch_link.STL" />
+          filename="package://y4burdf20260114/meshes/right_hip_pitch_link.STL" />
       </geometry>
       <material
         name="">
@@ -325,13 +321,13 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/right_hip_pitch_link.STL" />
+          filename="package://y4burdf20260114/meshes/right_hip_pitch_link.STL" />
       </geometry>
     </collision>
   </link>
   <joint
     name="right_hip_pitch_joint"
-        type="revolute">
+    type="revolute">
     <origin
       xyz="0.0055 -0.05745 -0.069"
       rpy="0 0 0" />
@@ -356,12 +352,12 @@ Stephen Brawner (brawner@gmail.com)
       <mass
         value="3.1782" />
       <inertia
-        ixx="0.044726"
-        ixy="1.119E-05"
-        ixz="-0.0018555"
-        iyy="0.046142"
+        ixx="0.04472619"
+        ixy="0.00001119"
+        ixz="-0.00185545"
+        iyy="0.04614187"
         iyz="0.00016232"
-        izz="0.0055004" />
+        izz="0.00550035" />
     </inertial>
     <visual>
       <origin
@@ -369,7 +365,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/right_hip_roll_link.STL" />
+          filename="package://y4burdf20260114/meshes/right_hip_roll_link.STL" />
       </geometry>
       <material
         name="">
@@ -383,13 +379,14 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/right_hip_roll_link.STL" />
+          filename="package://y4burdf20260114/meshes/right_hip_roll_link.STL" />
       </geometry>
     </collision>
   </link>
   <joint
     name="right_hip_roll_joint"
-    type="revolute">
+        type="revolute">
+        <!-- type="fixed"> -->
     <origin
       xyz="0.03048 -0.08605 0.0053744"
       rpy="0 -0.17453 0" />
@@ -414,12 +411,12 @@ Stephen Brawner (brawner@gmail.com)
       <mass
         value="1.5128" />
       <inertia
-        ixx="0.024367"
+        ixx="0.02436686"
         ixy="0.00020282"
-        ixz="-0.0044602"
-        iyy="0.025409"
-        iyz="0.0011184"
-        izz="0.0029117" />
+        ixz="-0.00446018"
+        iyy="0.02540934"
+        iyz="0.00111840"
+        izz="0.00291171" />
     </inertial>
     <visual>
       <origin
@@ -427,7 +424,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/right_knee_link.STL" />
+          filename="package://y4burdf20260114/meshes/right_knee_link.STL" />
       </geometry>
       <material
         name="">
@@ -441,7 +438,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/right_knee_link.STL" />
+          filename="package://y4burdf20260114/meshes/right_knee_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -467,17 +464,17 @@ Stephen Brawner (brawner@gmail.com)
     name="right_wheel_link">
     <inertial>
       <origin
-        xyz="5.78E-06 -0.024484 3.714E-05"
+        xyz="0 -0.041825 0"
         rpy="0 0 0" />
       <mass
-        value="0.94045" />
+        value="1.432" />
       <inertia
-        ixx="0.0023019"
-        ixy="-2E-08"
-        ixz="5E-08"
-        iyy="0.0043825"
-        iyz="-1.1E-07"
-        izz="0.0023022" />
+        ixx="0.00667054"
+        ixy="0"
+        ixz="0"
+        iyy="0.01217"
+        iyz="0"
+        izz="0.00667054" />
     </inertial>
     <visual>
       <origin
@@ -485,7 +482,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/right_wheel_link.STL" />
+          filename="package://y4burdf20260114/meshes/right_wheel_link.STL" />
       </geometry>
       <material
         name="">
@@ -499,7 +496,7 @@ Stephen Brawner (brawner@gmail.com)
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="../meshes/right_wheel_link.STL" />
+          filename="package://y4burdf20260114/meshes/right_wheel_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -515,10 +512,10 @@ Stephen Brawner (brawner@gmail.com)
       link="right_wheel_link" />
     <axis
       xyz="0 1 0" />
-      <limit
-    lower="-10000000"
-    upper="10000000"
-    effort="60"
-    velocity="15.603" />
+    <limit
+      lower="-10000000"
+      upper="10000000"
+      effort="60"
+      velocity="15.603" />
   </joint>
 </robot>

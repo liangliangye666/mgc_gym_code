@@ -42,9 +42,9 @@ import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor
 
 class cmd:
     vel_x = 0
-    vel_y = 0
+    vel_y = -2
     vel_yaw = 0
-    height = 0.74
+    height = 0.67
     heading = 0
 
 
@@ -244,8 +244,6 @@ def run_mujoco(policy, cfg):
 
         # Generate PD control
         tau = pd_control(target_q,default_q, q, cfg.robot_config.kps, target_dq, dq, cfg.robot_config.kds)  # Calc torques
-        # print("wheel_vel: " , q[[2, 5]])
-        # tau[[3, 7]] = (1 - cmd.mode) * tau[[3, 7]]
         tau = np.clip(tau, -cfg.robot_config.tau_limit, cfg.robot_config.tau_limit)  # Clamp torques
 
         # print("tau:", tau)
@@ -281,7 +279,7 @@ if __name__ == "__main__":
 
         class robot_config:
             kps = np.array([20, 20, 30, 0, 20, 20, 30, 0], dtype=np.double)
-            kds = np.array([2, 2, 3, 5, 2, 2, 3, 5], dtype=np.double)
+            kds = np.array([2, 2, 3, 2, 2, 2, 3, 2], dtype=np.double)
             # tau_limit = np.array([300, 300, 60, 60, 300, 300, 60, 60], dtype=np.double)
             tau_limit = np.array([745, 745, 460, 400, 745, 745, 460, 400], dtype=np.double)
             # tau_limit = 800.0 * np.ones(8, dtype=np.double)  # 力矩限制

@@ -188,11 +188,11 @@ void RL::Run(RobotModel& robot_model) {
   }
 #if SIM_ENABLE
   obs_[7] = robot_model.vel_des_ * obs_scales_lin_vel_;
-  obs_[8] = (0 - 0.1) * obs_scales_lin_vel_y_;
+  obs_[8] = (0 - 0.5) * obs_scales_lin_vel_y_;
   obs_[9] = robot_model.omega_des_ * obs_scales_ang_vel_;
 #else
   obs_[7] = (robot_model.vel_des_ + lin_vel_com_) * obs_scales_lin_vel_;
-  obs_[8] = (0 - 0.1) * obs_scales_lin_vel_y_;
+  obs_[8] = (0 - 0.0) * obs_scales_lin_vel_y_;
   obs_[9] = (robot_model.omega_des_ + omega_com_) * obs_scales_ang_vel_;
 #endif
   obs_[10] = 0.74 * 12.0;

@@ -208,12 +208,13 @@ class Y4B_2WHEEL(LeggedRobot):
         self.base_lin_vel_head = quat_rotate_inverse(self.base_quat_local, self.root_states[:, 7:10]) # head坐标系中的线速度
         self.base_ang_vel_head = quat_rotate_inverse(self.base_quat_local, self.root_states[:, 10:13]) # head坐标系中的角速度
         # 使用轮子速度作为机器人线速度,使用轮子差速作为机器人角速度
-        self.wheel_lin_vel = torch.sum(self.dof_vel[:, self.wheel_indices[[0, 1]]], dim=1) * 0.1 * 0.5
+        self.wheel_lin_vel = torch.sum(self.dof_vel[:, self.wheel_indices[[0, 1]]], dim=1) * self.cfg.asset.wheel_radius * 0.5
         self.wheel_ang_vel = (
-            (self.dof_vel[:, self.wheel_indices[1]] - self.dof_vel[:, self.wheel_indices[0]]) * 0.1 / (0.164*2)
+            (self.dof_vel[:, self.wheel_indices[1]] - self.dof_vel[:, self.wheel_indices[0]]) * self.cfg.asset.wheel_radius / self.cfg.asset.track_width
         )
 
         # 计算基座坐标系下两个轮的位置和姿态
+        self.wheel_pos = self.rigid_body_pos[:, self.wheel_link_indices, :]
         self.wheel_pos_left_local = quat_rotate_inverse(self.base_quat, (self.rigid_body_pos[:, self.wheel_link_indices[0], :]-self.rigid_body_pos[:, self.base_link_indices[0], :]))
         self.wheel_pos_right_local = quat_rotate_inverse(self.base_quat, (self.rigid_body_pos[:, self.wheel_link_indices[1], :]-self.rigid_body_pos[:, self.base_link_indices[0], :]))
         self.wheel_euler_left = get_euler_zyx_tensor(self.rigid_body_quat[:, self.wheel_indices[0], :])
@@ -648,6 +649,13 @@ class Y4B_2WHEEL(LeggedRobot):
             self.measured_heights = self._get_heights()
         # 计算并存储机器人的平均高度,去掉地形高度的影响,squeeze删除维度,unsqueeze增加维度
         self.base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
+        # 步态相位
+        period = 0.8
+        offset = 0.5
+        self.phase = (self.episode_length_buf * self.dt) % period / period
+        self.phase_left = self.phase
+        self.phase_right = (self.phase + offset) % 1
+        self.leg_phase = torch.cat([self.phase_left.unsqueeze(1), self.phase_right.unsqueeze(1)], dim=-1)
 
     def _resample_commands(self, env_ids):
         """Randommly select commands of some environments
@@ -1356,6 +1364,57 @@ class Y4B_2WHEEL(LeggedRobot):
 
     # ------------ reward functions----------------
     ################## 速度控制 ##################
+    # def _reward_tracking_lin_vel(self):
+    #     lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0]) / 0.1
+    #     rew_vx = torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
+    #     rew_wheel = -torch.abs(self.wheel_lin_vel - self.base_lin_vel[:, 0])
+    #     return rew_vx + rew_wheel
+
+    def _reward_tracking_lin_vel_y(self):
+        lin_vel_y_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1]) / 0.1
+        rew_vy = torch.exp(-lin_vel_y_error / self.cfg.rewards.tracking_sigma)
+        return rew_vy
+    
+    # def _reward_tracking_lin_vel_y(self):
+    #     lin_vel_y_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1]) / 0.1
+    #     rew_vy = torch.exp(-lin_vel_y_error / self.cfg.rewards.tracking_sigma)
+    #     contact = self.contact_forces[:, self.wheel_indices, 2] > 1.0
+    #     contact_left = (self.contact_forces[:, self.wheel_indices[0], 2] > 1.0).float()
+    #     contact_right = (self.contact_forces[:, self.wheel_indices[1], 2] > 1.0).float()
+    #     rew_alternating = contact_left + contact_right - 2*contact_left*contact_right   # 奖励单个轮子接触
+    #     foot_force_y = self.contact_forces[:, self.wheel_indices, 1]                    # y方向接触力
+    #     rew_step_y = (contact * foot_force_y).sum(dim=1)
+    #     return rew_vy + rew_alternating + rew_step_y
+    
+    def _reward_contact(self):
+        res = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+        cmd_vy = self.commands[:, 1]
+        gait_enable = (torch.abs(cmd_vy) > 0.05).float()
+        # print("leg_phase", self.leg_phase[0, :])
+        for i in range(2):
+            is_stance = self.leg_phase[:, i] < 0.55
+            contact = self.contact_forces[:, self.feet_indices[i], 2] > 5.0
+            res += ~(contact ^ is_stance)
+        return res * gait_enable
+    
+    def _reward_feet_swing_height(self):
+        contact = torch.norm(self.contact_forces[:, self.feet_indices, :3], dim=2) > 5.0
+        # print("wheel_pos", self.wheel_pos[0, :, 2])
+        pos_error = torch.square(self.wheel_pos[:, :, 2] - 0.18) * ~contact
+        rew_swing = torch.sum(pos_error, dim=(1))
+        cmd_vy = self.commands[:, 1]
+        gait_enable = (torch.abs(cmd_vy) > 0.05).float()  
+        return rew_swing * gait_enable
+    
+    # def _reward_tracking_ang_vel(self):
+    #     # Tracking of angular velocity commands (yaw)
+    #     ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
+    #     # ang_vel_error = torch.square(self.commands[:, 2] - self.wheel_ang_vel)
+    #     rew_wz = torch.exp(-ang_vel_error / self.cfg.rewards.tracking_sigma)
+    #     rew_wheel = -torch.abs(self.wheel_ang_vel - self.base_ang_vel[:, 2])
+    #     return rew_wz + rew_wheel
+
+
     def _reward_tracking_lin_vel(self):
         """
         计算增强的线性速度跟踪奖励。
@@ -1368,6 +1427,7 @@ class Y4B_2WHEEL(LeggedRobot):
         """
         # Tracking of linear velocity commands (x axes)
         lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0]) / 0.1
+        # lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0])
         ans = torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
         return ans
 
@@ -1388,20 +1448,20 @@ class Y4B_2WHEEL(LeggedRobot):
         # return ans.clip(0, 1)  # Ensure the reward is non-negative
         return torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma / 10) - 1
     
-    def _reward_tracking_lin_vel_y(self):
-        """
-        计算增强的线性速度跟踪奖励。
+    # def _reward_tracking_lin_vel_y(self):
+    #     """
+    #     计算增强的线性速度跟踪奖励。
 
-        该方法通过计算期望线性速度与实际线性速度之间的误差，并使用指数函数来计算奖励。
-        奖励值随着误差的减小而增加，从而鼓励机器人更好地跟踪期望的线性速度。
+    #     该方法通过计算期望线性速度与实际线性速度之间的误差，并使用指数函数来计算奖励。
+    #     奖励值随着误差的减小而增加，从而鼓励机器人更好地跟踪期望的线性速度。
 
-        Returns:
-            torch.Tensor: 增强的线性速度跟踪奖励。
-        """
-        # Tracking of linear velocity commands (x axes)
-        lin_vel_y_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1]) / 0.1
-        ans = torch.exp(-lin_vel_y_error / self.cfg.rewards.tracking_sigma)
-        return ans
+    #     Returns:
+    #         torch.Tensor: 增强的线性速度跟踪奖励。
+    #     """
+    #     # Tracking of linear velocity commands (x axes)
+    #     lin_vel_y_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1]) / 0.1
+    #     ans = torch.exp(-lin_vel_y_error / self.cfg.rewards.tracking_sigma)
+    #     return ans
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw)
@@ -1456,6 +1516,10 @@ class Y4B_2WHEEL(LeggedRobot):
         ans = torch.exp(-torch.abs(self.wheel_pos_left_local_x - self.wheel_pos_right_local_x) / 0.1)
         # print("4", torch.square(self.wheel_pos_left_local_x - self.wheel_pos_right_local_x))
         return ans
+    
+    def _reward_hip_pos(self):
+        return torch.sum(torch.square(self.dof_pos[:, [1,4]]), dim=1)
+
     
 ################## 接触控制 ##################
     # def _reward_wheel_contact_force(self):

@@ -103,6 +103,7 @@ class RL {
 
   // rl obs scale
   double obs_scales_lin_vel_;
+  double obs_scales_lin_vel_y_;
   double obs_scales_ang_vel_;
   double obs_scales_dof_pos_;
   double obs_scales_dof_vel_;

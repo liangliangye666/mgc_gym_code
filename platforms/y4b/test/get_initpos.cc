@@ -9,19 +9,24 @@
 
 int main(int argc, char** argv) {
   std::string workspacePath = std::getenv("PROJECT_ROOT_DIR");
-  std::string urdf_filename =
-      workspacePath + "/sim/model/y4b/urdf/y4burdf20260114.urdf";
+  std::string urdf_filename = workspacePath + "/sim/model/y4b/urdf/y4burdf20260114.urdf";
   pinocchio::Model robot_model;
   pinocchio::JointModelFreeFlyer root_joint;
   pinocchio::urdf::buildModel(urdf_filename, root_joint, robot_model);
   pinocchio::Data robot_data = pinocchio::Data(robot_model);
   // 打印一下各关节id
-  for (pinocchio::JointIndex joint_id = 1; joint_id < robot_model.njoints;
-       ++joint_id) {
+  for (pinocchio::JointIndex joint_id = 1; joint_id < robot_model.njoints; ++joint_id) {
     const std::string& joint_name = robot_model.names[joint_id];
     const pinocchio::JointModel& joint = robot_model.joints[joint_id];
-    std::cout << "Joint ID: " << joint_id << ", Name: " << joint_name
-              << ", Type: " << joint.shortname() << std::endl;
+    std::cout << "Joint ID: " << joint_id << ", Name: " << joint_name << ", Type: " << joint.shortname() << std::endl;
+  }
+
+  for (pinocchio::FrameIndex frame_id = 0; frame_id < robot_model.frames.size(); ++frame_id) {
+    const pinocchio::Frame& frame = robot_model.frames[frame_id];
+
+    if (frame.type == pinocchio::FrameType::BODY) {
+      std::cout << "Link ID: " << frame_id << ", Link name: " << frame.name << ", Parent joint: " << robot_model.names[frame.parentJoint] << std::endl;
+    }
   }
 
   std::cout << "robot_name: " << robot_model.name << std::endl;
@@ -38,12 +43,12 @@ int main(int argc, char** argv) {
   std::cout << "left_wheel_joint id is: " << front_wheel_joint_l << std::endl;
 
   Eigen::Vector3d whlposL, com, whl2com;
-  double angKnee = -M_PI/2;
+  double angKnee = -M_PI / 2;
   for (int i = 0;; i++) {
     angKnee += (0.001 / 180.0) * M_PI;
     // std::cout << "knee =: " << angKnee << std::endl;
-    double angHip = (-20.0 / 180.0) * M_PI;
-    q << 0, 0, 0, 0, 0, 0, 0, angHip, angKnee, 0, angHip, angKnee, 0;
+    double angHip = (-30.0 / 180.0) * M_PI;
+    q << 0, 0, 0, 0, 0, 0, 0, angHip, 0, angKnee, 0, angHip, 0, angKnee, 0;
 
     pinocchio::forwardKinematics(robot_model, robot_data, q);
     whlposL = robot_data.oMi[front_wheel_joint_l].translation();
