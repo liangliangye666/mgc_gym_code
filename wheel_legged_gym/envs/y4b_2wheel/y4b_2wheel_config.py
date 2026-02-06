@@ -38,7 +38,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
     class env(LeggedRobotCfg.env):
         num_envs = 4096  # 4096,设置并行训练的环境数量,在仿真中会同时运行此数量的独立实例
         num_actions = 8 # 每个环境中机器人的动作空间维度,通常对应于机器人的关节数量
-        num_observations = 3 + 4 + 4 + 3 + 3 + num_actions*2  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
+        num_observations = 3 + 4 + 4 + 3 + 3 + num_actions*2 + 2  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
         num_privileged_obs = 3 + 3 + num_observations + 3 + num_actions*4 + 7 * 11 + 3 + 1 * 3 + 6 # 特权观测,评论家网络输入
         obs_history_length = 5  # number of observations stacked together,状态观测历史堆叠的长度
         obs_history_dec = 1 # 状态历史堆叠的衰减参数,当前时刻权重最高,这里设置为1说明没有衰减
@@ -110,10 +110,10 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         heading_command = False  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
 
         class ranges: # 定义了每个命令可以取值的范围
-            lin_vel_x = [-0, 0]  # min max [m/s],线速度命令范围
-            lin_vel_y = [-1, 1]
-            ang_vel_yaw = [-0.0, 0.0] # 角速度命令范围
-            height = [0.70, 0.72]  # 高度范围上下浮动3cm
+            lin_vel_x = [-0.5, 0.5]  # min max [m/s],线速度命令范围
+            lin_vel_y = [-0.5, 0.5]
+            ang_vel_yaw = [-0.5, 0.5] # 角速度命令范围
+            height = [0.657, 0.687]  # 高度范围上下浮动3cm
             heading = [-3.14, 3.14] # 朝向范围
 
     class control(LeggedRobotCfg.control):
@@ -124,9 +124,9 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
 
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip": 100.0, "knee": 150.0, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip_pitch": 20.0, "hip_roll": 20.0, "knee": 30.0, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip": 10, "knee": 15, "wheel": 5.0}  # [N*m*s/rad]
+        damping = {"hip_pitch": 2, "hip_roll": 2, "knee": 3, "wheel": 2.0}  # [N*m*s/rad]
 
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 2
@@ -225,7 +225,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             # 速度跟踪
             tracking_lin_vel = 1
             tracking_lin_vel_enhance = 1
-            tracking_lin_vel_y = 10
+            tracking_lin_vel_y = 1
             tracking_ang_vel = 1
 
             # 姿态控制
@@ -234,9 +234,12 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             orientation = 1 # 基座重力投影方向
             # base_euler = 1
             leg_end_x_diff = 1 # 两条腿不要叉开
-            hip_pos = -0.1
-            contact = 20
-            feet_swing_height = -100
+            hip_pos = -1
+            feet_distance = -2
+            contact = 10
+            feet_swing_height = 100.0
+            contact_no_vel = -5
+            # no_step_when_stand = 100
             # 轮与地面接触
             # wheel_contact_force = 1 # 1 #-1e-3 # 两前轮与地面接触,两后轮与地面分离
             # back_wheel_contact = -0.1 #-0.1 # 两后轮与地面分离
@@ -247,7 +250,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
 
             # 机器人关节柔顺性
             # dof_vel = -0.05         #-0.05
-            # dof_acc = -2.5e-7
+            dof_acc = -2.5e-7
             torques = -2e-7 #-0.0001
             action_rate = -0.05
             action_smooth = -0.05
@@ -282,7 +285,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
 
         # 接触力
         min_wheel_contact_force = 20.0
-
+        min_feet_distance = 0.3
     class sim(LeggedRobotCfg.sim):
         dt = 0.005  # 模拟时间步长 [秒]
         substeps = 1  # 每个时间步的子步数

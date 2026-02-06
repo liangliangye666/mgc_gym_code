@@ -41,8 +41,8 @@ import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor
 
 
 class cmd:
-    vel_x = 0
-    vel_y = -2
+    vel_x = 0.0
+    vel_y = -0.0
     vel_yaw = 0
     height = 0.67
     heading = 0
@@ -183,8 +183,9 @@ def run_mujoco(policy, cfg):
 
     count_lowlevel = 0
 
-    for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
 
+    for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
+        phase = (count_lowlevel * 0.01) % 0.6 / 0.6
         # Obtain an observation
         q, dq, quat, v, omega, gvec = get_obs(data) # 获取17+16+4+3+3+3=46维的观测量
 
@@ -220,10 +221,12 @@ def run_mujoco(policy, cfg):
         obs[0, 14:17] = q[4:7] * cfg.normalization.obs_scales.dof_pos
         obs[0, 17:25] = dq * cfg.normalization.obs_scales.dof_vel
         obs[0, 25:33] = action
+        obs[0, 33] = np.sin(2 * np.pi * phase)
+        obs[0, 34] = np.cos(2 * np.pi * phase)
 
-        obs[0,33]=v[0]
-        obs[0,34]=v[1]
-        obs[0,35]=v[2]
+        obs[0,35]=v[0]
+        obs[0,36]=v[1]
+        obs[0,37]=v[2]
         # obs[0,34:37]=base_euler_zyx
 
         obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
@@ -278,6 +281,8 @@ if __name__ == "__main__":
             decimation = 2 # 设置控制频率与仿真频率的比值为10,即每隔10步执行一次控制策略
 
         class robot_config:
+            # kps = np.array([30, 50, 50, 0, 30, 50, 50, 0], dtype=np.double)
+            # kds = np.array([3, 5, 5, 5, 3, 5, 5, 5], dtype=np.double)
             kps = np.array([20, 20, 30, 0, 20, 20, 30, 0], dtype=np.double)
             kds = np.array([2, 2, 3, 2, 2, 2, 3, 2], dtype=np.double)
             # tau_limit = np.array([300, 300, 60, 60, 300, 300, 60, 60], dtype=np.double)

@@ -28,6 +28,7 @@ void FSM::Run(RobotModel& robot_model) {
   auto start = std::chrono::high_resolution_clock::now();
   // fsm_id_ = static_cast<int>(FsmId::Rl);  // Safe state
   if (!CheckSafety(robot_model)) {
+  // if (true) {
     fsm_id_ = static_cast<int>(FsmId::Rl);  // Safe state
   } else {
     fsm_id_ = static_cast<int>(FsmId::RlEDamp);
@@ -89,7 +90,7 @@ bool FSM::CheckSafety(RobotModel& robot_model) {
                    << " tau is " << tau_[index - 6] << "\n";
       tau_[index - 6] = std::clamp(tau_[index - 6], limit.tau_min, limit.tau_max);
       LOG(ERROR) << "Robot is in unsafe state!!!";
-      EDamp_signal_ = true;
+      // EDamp_signal_ = true;
       return EDamp_signal_;
     }
   }

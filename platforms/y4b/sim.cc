@@ -59,12 +59,18 @@ void MyController(const mjModel* m, mjData* d) {
   static y4b::FSM fsm(robot_model);
   robot_model.vel_des_ = -0.0;
   robot_model.omega_des_ = 0.0;
+  static double count_num = 0;
+  robot_model.phase_ = std::fmod(count_num * 0.01, 0.6) / 0.6;
+  std::cout << "phase_sim: " << robot_model.phase_ << std::endl;
+  count_num += 1;
+ 
 
   fsm.Run(robot_model);
   Eigen::VectorXd pos_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6); // 初始化力矩命令向量
   Eigen::VectorXd tau_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6); // 初始化力矩命令向量
   tau_cmd = fsm.tau();
   pos_cmd = fsm.pos();
+  std::cout << "tau_cmd:" << tau_cmd << std::endl;
 
   for (size_t i = 0; i < robot_model.pino_model().nv-6; i++) {
     d->ctrl[i] = tau_cmd[i];

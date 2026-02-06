@@ -5,7 +5,7 @@ RL::RL(RobotModel& robot_model) {
   // FLAGS_logtostderr = 1;
   // FLAGS_colorlogtostderr = 1;
 
-  num_obs_ = 33;                                   // 观测值数目,输入到actor网络
+  num_obs_ = 35;                                   // 观测值数目,输入到actor网络
   num_actions_ = robot_model.pino_model().nv - 6;  // 自由度数目,输出到电机执行
   hist_len_ = 5;                                   // 历史观测长度,输入到critic和actor网络
   num_est_ = 3;                                    // 估计状态数目,输入到critic和actor网络
@@ -123,7 +123,7 @@ void RL::InferenceLoop() {
       Eigen::Map<const Eigen::VectorXd> est_outputs_map(est_outputs_ptr, num_est_);
       Eigen::Vector3d est_lin_vel = est_outputs_map / obs_scales_lin_vel_;
       Eigen::VectorXd est_latent = est_lin_vel * obs_scales_lin_vel_;
-      // Eigen::VectorXd est_latent = base_vel * obs_scales_lin_vel_;  // 数据缩放,直接使用经典状态估计
+      // Eigen::VectorXd est_latent = base_vel * obs_scales_lin_vel_;  // 数据缩放,直接使用仿真器真值
 
       // controller inference
       Eigen::VectorXd ctrl_input(num_ctrl_);
@@ -188,14 +188,14 @@ void RL::Run(RobotModel& robot_model) {
   }
 #if SIM_ENABLE
   obs_[7] = robot_model.vel_des_ * obs_scales_lin_vel_;
-  obs_[8] = (0 - 0.5) * obs_scales_lin_vel_y_;
+  obs_[8] = (0 - 0.0) * obs_scales_lin_vel_y_;
   obs_[9] = robot_model.omega_des_ * obs_scales_ang_vel_;
 #else
   obs_[7] = (robot_model.vel_des_ + lin_vel_com_) * obs_scales_lin_vel_;
   obs_[8] = (0 - 0.0) * obs_scales_lin_vel_y_;
   obs_[9] = (robot_model.omega_des_ + omega_com_) * obs_scales_ang_vel_;
 #endif
-  obs_[10] = 0.74 * 12.0;
+  obs_[10] = 0.67 * 12.0;
   obs_[11] = pos[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_pos_;
   obs_[12] = pos[static_cast<int>(Joints::left_hip_roll_joint)] * obs_scales_dof_pos_;
   obs_[13] = pos[static_cast<int>(Joints::left_knee_joint)] * obs_scales_dof_pos_;
@@ -212,6 +212,9 @@ void RL::Run(RobotModel& robot_model) {
   obs_[23] = vel[static_cast<int>(Joints::right_knee_joint)] * obs_scales_dof_vel_;
   obs_[24] = vel[static_cast<int>(Joints::right_wheel_joint)] * obs_scales_dof_vel_;
   obs_.segment(25, 8) = actions_;
+  obs_[33] = sin(2 * M_PI * robot_model.phase_);
+  std::cout << "phase:" << robot_model.phase_ << "obs:" << obs_[33]<< std::endl;
+  obs_[34] = cos(2 * M_PI * robot_model.phase_);
   obs_ = obs_.cwiseMin(clip_obs_).cwiseMax(-clip_obs_);
 
   robot_model.observed_value[7] = obs_[0];

@@ -67,6 +67,7 @@ void RobotModel::Initialize() {
   S_transpose_pinv = (S * S.transpose()).inverse() * S;
   vel_des_ = 0;
   omega_des_ = 0;
+  phase_ = 0;
 
   R_HW = Eigen::Matrix3d::Identity();
   R_WH = Eigen::Matrix3d::Identity();

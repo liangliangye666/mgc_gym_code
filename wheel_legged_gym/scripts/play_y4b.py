@@ -121,8 +121,8 @@ def play(args):
 
         env.commands[:, 0] = 0.0  # lin_vel
         env.commands[:, 1] = 0  # ang_vel
-        env.commands[:, 2] = 0.737  # height
-        env.commands[:, 3] = 0
+        env.commands[:, 2] = 0 # height
+        env.commands[:, 3] = 0.667
 
         if i > 300 and i<=1500:
             vel_cmd[:] = env.commands[:, 0] * np.clip((i - 300) * 0.05, 0, 1)

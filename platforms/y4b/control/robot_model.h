@@ -123,6 +123,7 @@ class RobotModel {
   // Robot cmds
   double vel_des_;
   double omega_des_;
+  double phase_;
   // Robot states
   double control_dt;
   Eigen::VectorXd q_rpy;
