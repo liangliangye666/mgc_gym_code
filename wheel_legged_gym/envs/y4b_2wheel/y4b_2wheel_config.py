@@ -38,8 +38,8 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
     class env(LeggedRobotCfg.env):
         num_envs = 4096  # 4096,设置并行训练的环境数量,在仿真中会同时运行此数量的独立实例
         num_actions = 8 # 每个环境中机器人的动作空间维度,通常对应于机器人的关节数量
-        num_observations = 3 + 4 + 4 + 3 + 3 + num_actions*2 + 2  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
-        num_privileged_obs = 3 + 3 + num_observations + 3 + num_actions*4 + 7 * 11 + 3 + 1 * 3 + 6 # 特权观测,评论家网络输入
+        num_observations = 3 + 4 + 4 + 3 + 3 + num_actions*2 + 3  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
+        num_privileged_obs = 3 + 3 + num_observations + 3 + num_actions*4 + 7 * 11 + 3 + 1 * 3 + 6 + 3# 特权观测,评论家网络输入
         obs_history_length = 5  # number of observations stacked together,状态观测历史堆叠的长度
         obs_history_dec = 1 # 状态历史堆叠的衰减参数,当前时刻权重最高,这里设置为1说明没有衰减
         env_spacing = 3.0  # not used with heightfields/trimeshes,环境中示例之间的间隔为3.0米
@@ -105,16 +105,17 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         basic_max_curriculum = 1.5 # 不同阶段的课程学习的难度值
         advanced_max_curriculum = 2 # 高级阶段的最大课程难度值
         curriculum_threshold = 0.7 # 课程学习的阈值
-        num_commands = 5 # 命令的数量
+        num_commands = 6 # 命令的数量
         resampling_time = 10.0  # time before command are changed[s],重新采样命令的时间间隔
         heading_command = False  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
 
         class ranges: # 定义了每个命令可以取值的范围
-            lin_vel_x = [-0.5, 0.5]  # min max [m/s],线速度命令范围
+            lin_vel_x = [-0.5, 0.5]     # min max [m/s],线速度命令范围
             lin_vel_y = [-0.5, 0.5]
-            ang_vel_yaw = [-0.5, 0.5] # 角速度命令范围
-            height = [0.657, 0.687]  # 高度范围上下浮动3cm
-            heading = [-3.14, 3.14] # 朝向范围
+            ang_vel_yaw = [-0.5, 0.5]   # 角速度命令范围
+            height = [0.657, 0.687]     # 高度范围上下浮动3cm
+            heading = [-3.14, 3.14]     # 朝向范围
+            gait = [0, 1]               # 步态命令
 
     class control(LeggedRobotCfg.control):
         # 位置动作的缩放系数
@@ -141,11 +142,14 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         joint_link_indices = [1, 2, 3, 5, 6, 7]
         wheel_link_indices = [4, 8]
         wheel_radius = 0.1
+        gait_foot_height = 0.15
+        gait_period = 0.6 
         track_width = 0.166*2
         penalize_contacts_on = ["right_hip", "right_knee", "base", "left_hip", "left_knee"] # 惩罚区域
         terminate_after_contacts_on = ["base"] # 终止区域
         self_collisions = 1  # 1 to disable, 0 to enable...bitwise filter,控制机器人自身各部分之间是否能够发生碰撞检测
         flip_visual_attachments = False # 设置是否反转视觉附件
+        stage_names = ["stand", "gait", "recover"]
 
     class domain_rand(LeggedRobotCfg.domain_rand):
 
@@ -190,7 +194,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             lin_vel = 2.0
             lin_vel_y = 2.0
             ang_vel = 0.25  # 0.25
-
+            gait = 1.0
             dof_pos = 1.0
             dof_vel = 0.05
             dof_acc = 0.0025
@@ -223,9 +227,9 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
 
             # 速度跟踪
-            tracking_lin_vel = 1
-            tracking_lin_vel_enhance = 1
-            tracking_lin_vel_y = 1
+            tracking_lin_vel_x = 1
+            # tracking_lin_vel_enhance = 1
+            tracking_lin_vel_y = 2
             tracking_ang_vel = 1
 
             # 姿态控制
@@ -239,7 +243,8 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             contact = 10
             feet_swing_height = 100.0
             contact_no_vel = -5
-            # no_step_when_stand = 100
+            enter_gait = 0.5
+
             # 轮与地面接触
             # wheel_contact_force = 1 # 1 #-1e-3 # 两前轮与地面接触,两后轮与地面分离
             # back_wheel_contact = -0.1 #-0.1 # 两后轮与地面分离

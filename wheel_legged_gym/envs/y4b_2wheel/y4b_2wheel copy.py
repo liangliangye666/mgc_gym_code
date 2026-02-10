@@ -234,8 +234,8 @@ class Y4B_2WHEEL(LeggedRobot):
         # 计算奖励
         self.compute_reward()
         # 更新控制状态机所在阶段
-        self.update_stage()
-        self.update_gait_phase()
+        # self.update_stage()
+        # self.update_gait_phase()
         # 获取需要重置的环境 ID
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         # 重置指定的环境
@@ -395,13 +395,11 @@ class Y4B_2WHEEL(LeggedRobot):
         self.gym.refresh_net_contact_force_tensor(self.sim)
         self.last_contact_forces = self.contact_forces
         # 清空所有 stage
-        self.phase[env_ids] = 0.0
         self.stage_buf[env_ids, :] = 0.0
         # 强制设为 stand
         self.stage_buf[env_ids, 0] = 1.0
         # 可选：清空阶段时间，防止残留
         self.stage_time_buf[env_ids] = 0.0
-        self.last_stage[env_ids] = 0.0
 
     def compute_reward(self):
         """Compute rewards
@@ -664,12 +662,12 @@ class Y4B_2WHEEL(LeggedRobot):
         # 计算并存储机器人的平均高度,去掉地形高度的影响,squeeze删除维度,unsqueeze增加维度
         self.base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
         # 步态相位
-        # period = 0.6
-        # offset = 0.5
-        # self.phase = (self.episode_length_buf * self.dt) % period / period
-        # self.phase_left = self.phase
-        # self.phase_right = (self.phase + offset) % 1
-        # self.leg_phase = torch.cat([self.phase_left.unsqueeze(1), self.phase_right.unsqueeze(1)], dim=-1)
+        period = 0.6
+        offset = 0.5
+        self.phase = (self.episode_length_buf * self.dt) % period / period
+        self.phase_left = self.phase
+        self.phase_right = (self.phase + offset) % 1
+        self.leg_phase = torch.cat([self.phase_left.unsqueeze(1), self.phase_right.unsqueeze(1)], dim=-1)
 
     def _resample_commands(self, env_ids):
         """Randommly select commands of some environments
@@ -677,7 +675,6 @@ class Y4B_2WHEEL(LeggedRobot):
         Args:
             env_ids (List[int]): Environments ids for which new commands are needed
         """
-        old_cmd = self.commands.clone()               # 拷贝旧命令
         self.commands[env_ids, 0] = torch_rand_float( # 线速度重采样
             self.command_ranges["lin_vel_x"][0],
             self.command_ranges["lin_vel_x"][1],
@@ -713,33 +710,19 @@ class Y4B_2WHEEL(LeggedRobot):
                 (len(env_ids), 1),
                 device=self.device,
             ).squeeze(1)
-
-        self.commands[env_ids, 5] = torch.randint( # 线速度重采样
-            self.command_ranges["gait"][0],
-            self.command_ranges["gait"][1]+1,
-            (len(env_ids),),
-            device=self.device,
-        ).float() 
         # set small commands to zero
         # self.commands[env_ids, :1] *= (torch.norm(self.commands[env_ids, :2], dim=1) > 0.2).unsqueeze(1)
-        # 只在“需要 gait 的命令刚出现时” reset FSM
-        need_gait = torch.abs(self.commands[:, 1]) > 0.1
-        prev_need_gait = torch.abs(old_cmd[:, 1]) > 0.1
-        enter_gait = (~prev_need_gait) & need_gait
-        reset_ids = torch.where(enter_gait)[0]
-        if len(reset_ids) > 0:
-            self.stage_buf[reset_ids, :] = 0.0
-            self.stage_buf[reset_ids, 0] = 1.0
-            self.stage_time_buf[reset_ids] = 0.0
-            self.phase[reset_ids] = 0.0
-            self.last_stage[reset_ids] = 0
+        # 清空所有 stage
+        self.stage_buf[env_ids, :] = 0.0
+        # 强制设为 stand
+        self.stage_buf[env_ids, 0] = 1.0
+        # 可选：清空阶段时间，防止残留
+        self.stage_time_buf[env_ids] = 0.0
 
     def compute_proprioception_observations(self):
         # note that observation noise need to modified accordingly !!!
-        gait_flag = self.gait_enable.unsqueeze(1)
-        sin_phase = torch.sin(2 * np.pi * self.phase ).unsqueeze(1) * gait_flag
-        cos_phase = torch.cos(2 * np.pi * self.phase ).unsqueeze(1) * gait_flag
-        
+        sin_phase = torch.sin(2 * np.pi * self.phase ).unsqueeze(1)
+        cos_phase = torch.cos(2 * np.pi * self.phase ).unsqueeze(1)
         obs_buf = torch.cat(
             (
                 # self.base_lin_vel * self.obs_scales.lin_vel, # 3, 机器人base线速度
@@ -750,7 +733,6 @@ class Y4B_2WHEEL(LeggedRobot):
                 self.dof_pos[:, 4:7] * self.obs_scales.dof_pos,  # 3 ,机器人关节位置,右边髋膝关节
                 self.dof_vel * self.obs_scales.dof_vel,  # 8 , 8个关节速度
                 self.actions,  # 8 ,8个关节输出(上一时刻)
-                gait_flag,
                 sin_phase,
                 cos_phase,
             ),
@@ -791,7 +773,6 @@ class Y4B_2WHEEL(LeggedRobot):
                     self.friction_coef.view(self.num_envs, 1),  # 1,摩擦系数
                     self.restitution_coef.view(self.num_envs, 1),  # 1,弹性系数
                     external_forces_and_torques * self.priv_obs_scales.external_wrench,  # 6,基座外力(矩)
-                    self.stage_buf.float(),
                 ),
                 dim=-1,
             )
@@ -861,7 +842,7 @@ class Y4B_2WHEEL(LeggedRobot):
         noise_vec[14:17] = noise_scales.dof_pos * noise_level * self.obs_scales.dof_pos 
         noise_vec[17:25] = noise_scales.dof_vel * noise_level * self.obs_scales.dof_vel  # dof_vel_all
         noise_vec[25:33] = 0.0  # previous actions
-        noise_vec[33:36] = 0.0
+        noise_vec[33:35] = 0.0
         return noise_vec
 
     # ----------------------------------------
@@ -1113,8 +1094,6 @@ class Y4B_2WHEEL(LeggedRobot):
         self.rwd_angVelTrackEnhancedPrev = torch.zeros(self.num_envs, device=self.device)
         # 步态
         self.phase = torch.zeros(self.num_envs, device=self.device)
-        self.last_stage = torch.zeros(self.num_envs, device=self.device)
-        self.gait_enable = torch.zeros(self.num_envs, device=self.device)
         self.leg_phase = torch.zeros((self.num_envs, 2),device=self.device,dtype=torch.float32)
         self.num_stages = len(self.cfg.asset.stage_names)                                                       # 状态数量
         self.stage_buf = torch.zeros((self.num_envs, self.num_stages),dtype=torch.float32, device=self.device)  # 每个环境处于什么状态
@@ -1420,14 +1399,16 @@ class Y4B_2WHEEL(LeggedRobot):
     def update_stage(self):
         ##stage_buf: ["stand", "gait", "recover"] -> 两轮站立,步态,恢复两轮
         #当前为gait且步态命令false：进入stand
-        need_gait = (torch.abs(self.commands[:, 1]) > 0.1)                          # y方向有命令才使用步态
-        fz = self.contact_forces[:, self.feet_indices, 2]                           # 获取轮子z向力
+        need_gait = torch.abs(self.commands[:, 1] > 0.1)                            # y方向有命令才使用步态
+        fz = (self.contact_forces[:, self.feet_indices, 2] < 1.0).float()           # 获取轮子z向力
         foot_contact = (fz > 5.0).float()                                           # 轮子接触情况
         both_on_ground = torch.prod(foot_contact, dim=1) > 0                        # 两个轮子都在地上
         ####################第一阶段:stand->gait######################
-        from0_to1 = torch.logical_and(self.stage_buf[:, 0] == 1.0, torch.logical_and(need_gait, self.stage_time_buf > 0.3)).float()
+        from0_to1 = torch.logical_and(self.stage_buf[:, 0] == 1.0, torch.logical_and(need_gait,torch.logical_and(self.stage_time_buf > 0.3,             # 防抖
+                self.base_height > 0.55                # 已站稳
+            ))).float()
         ####################第二阶段:gait->recover####################
-        from1_to2 = ((self.stage_buf[:, 1] == 1.0) & (~need_gait) & (self.stage_time_buf > 0.6)).float()
+        from1_to2 = torch.logical_and(self.stage_buf[:, 1] == 1.0, ~need_gait).float()
         ####################第三阶段:recover->stand###################
         from2_to0 = torch.logical_and(self.stage_buf[:, 2] == 1.0, torch.logical_and(
             both_on_ground,
@@ -1452,13 +1433,15 @@ class Y4B_2WHEEL(LeggedRobot):
         self.last_stage = current_stage.clone()
 
     def update_gait_phase(self):
-        period = self.cfg.asset.gait_period
+        period = 0.6
         offset = 0.5
-        self.gait_enable = self.stage_buf[:, 1] == 1.0  # gait
+
+        gait_enable = self.stage_buf[:, 1] == 1.0  # gait
+
         phase = torch.zeros_like(self.stage_time_buf)
 
         # 只在 gait 阶段推进 phase
-        phase[self.gait_enable] = (self.stage_time_buf[self.gait_enable] % period) / period
+        phase[gait_enable] = (self.stage_time_buf[gait_enable] % period) % period
         self.phase = phase
         self.phase_left = phase
         self.phase_right = (phase + offset) % 1.0
@@ -1467,7 +1450,108 @@ class Y4B_2WHEEL(LeggedRobot):
 
     # ------------ reward functions----------------
     ################## 速度控制 ##################
-    def _reward_tracking_lin_vel_x(self):
+    # def _reward_tracking_lin_vel(self):
+    #     lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0]) / 0.1
+    #     rew_vx = torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
+    #     rew_wheel = -torch.abs(self.wheel_lin_vel - self.base_lin_vel[:, 0])
+    #     return rew_vx + rew_wheel
+
+    def _reward_tracking_lin_vel_y(self):
+        gait_enable = self.stage_buf[:, 1]    # 只在 stand / recover
+        # 只有至少有一只脚离地后，才开始追踪 y 速度
+        has_swing = (self.contact_forces[:, self.feet_indices, 2] < 1.0).any(dim=1).float()
+        lin_vel_y_error = torch.square(self.commands[:, 1]  - self.base_lin_vel[:, 1]) / 0.1
+        rew_vy = torch.exp(-lin_vel_y_error / self.cfg.rewards.tracking_sigma)
+        # gait_enable = (torch.abs(self.commands[:, 1]) > 0.1).float()
+        # return rew_vy * gait_enable * has_swing
+        return rew_vy
+    
+    def _reward_contact(self): 
+        gait_enable  = self.stage_buf[:, 1]    # 只在 gait
+        # 接触力 z
+        fz = self.contact_forces[:, self.feet_indices, 2]  # [N, 2]
+
+        # gait_enable = (torch.abs(self.commands[:, 1]) <= 0.1)           # 两轮平衡,不使用步态
+        # gait_enable = gait_enable[:, None]      # 扩张维度
+
+        # 支撑期希望 fz 大，摆动期希望 fz 小
+        is_stance = (self.leg_phase < 0.55).float()
+        # is_stance = (self.leg_phase < 0.55)                             # 支撑脚
+        # is_stance = (is_stance | gait_enable).float()                             # 把无步态的环境的机器人两只脚都重置为支撑脚
+        # 连续 reward
+        stance_rew = is_stance * torch.clamp(fz / 50.0, 0, 1)           # 支撑脚力越大越好
+        swing_rew  = (1 - is_stance) * torch.exp(-fz / 5.0)             # 摆动脚力越小越好
+
+        # 摆动期却接触地面 → 惩罚
+        swing_contact = (1 - is_stance) * (fz > 1.0).float()
+        swing_contact_penalty = torch.sum(swing_contact, dim=1)
+
+        # swing_rew  = (1 - is_stance) * torch.clamp(1 - fz / 10.0, 0.0, 1.0)
+        # rew_gait = torch.sum(stance_rew + swing_rew, dim=1) - 1.0 * swing_contact_penalty            # 步态奖励
+        rew_gait = torch.sum(stance_rew + swing_rew, dim=1)                                            # 步态奖励
+        # print("message:", torch.cat([gait_enable[0].unsqueeze(0),self.phase[0].unsqueeze(0), is_stance[0]], dim=0))
+        # return rew_gait * gait_enable
+        return rew_gait
+    
+    def _reward_first_foot_lift(self):
+        gait_enable = self.stage_buf[:, 1]
+
+        fz = self.contact_forces[:, self.feet_indices, 2]
+        foot_contact = (fz > 1.0).float()
+
+        first_lift = self.prev_foot_contact * (1.0 - foot_contact)
+        first_lift = first_lift * gait_enable.unsqueeze(1)
+
+        rew = 5.0 * torch.sum(first_lift, dim=1)
+
+        self.prev_foot_contact = foot_contact.detach()
+        return rew
+
+
+    def _reward_no_step_when_stand(self):
+        stand_enable = self.stage_buf[:, 0]    # 只在 stand / recover
+        fz = self.contact_forces[:, self.feet_indices, 2]                  # 两个脚的z向接触力
+        foot_contact = (fz > 5.0).float()                                 # 脚触地
+        rew = torch.prod(foot_contact, dim=1)
+        # print("message:", torch.cat([stand_enable[0].unsqueeze(0), foot_contact[0], rew[0].unsqueeze(0)], dim=0))
+        return rew * stand_enable
+
+    def _reward_feet_swing_height(self):
+        gait_enable  = self.stage_buf[:, 1]    # 只在 gait
+        z = self.wheel_pos[:, :, 2]
+        fz = self.contact_forces[:, self.feet_indices, 2]
+        swing = (fz < 1.0).float()
+
+        swing_ratio = torch.clamp(1.0 - fz / 10.0, 0.0, 1.0)  # fz 越小，越接近 1
+
+        z_min = 0.1
+        z_target = 0.15
+
+        # 抬起来先给奖励
+        base = torch.clamp(z - z_min, min=0.0)
+
+        # gait_weight = torch.clamp(torch.abs(self.commands[:, 1] - 0.1) / 0.4, 0.0, 1.0)
+        # gait_weight = gait_weight[:, None]
+        # height_err = torch.abs(z - 0.1 - 0.05 * gait_weight)
+        # 高度偏差惩罚（平滑）
+        height_err = torch.abs(z - z_target)
+        height_penalty = torch.clamp(height_err, max=0.05)
+
+        rew = torch.sum((base - 0.5 * height_penalty) * swing, dim=1)
+        return 2.0 * rew
+        # rew = torch.sum((- 0.5 * height_penalty) * swing, dim=1)
+        # return 2.0 * rew * gait_enable
+
+    
+    def _reward_contact_no_vel(self):
+        # Penalize contact with no velocity
+        contact = torch.norm(self.contact_forces[:, self.feet_indices, :3], dim=2) > 1.
+        contact_feet_vel = self.wheel_vel * contact.unsqueeze(-1)
+        penalize = torch.square(contact_feet_vel[:, :, 1:3])
+        return torch.sum(penalize, dim=(1,2))
+
+
+    def _reward_tracking_lin_vel(self):
         """
         计算增强的线性速度跟踪奖励。
 
@@ -1479,17 +1563,19 @@ class Y4B_2WHEEL(LeggedRobot):
         """
         # Tracking of linear velocity commands (x axes)
         lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0]) / 0.1
+        # lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0])
         ans = torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
         return ans
-    
-    def _reward_tracking_lin_vel_y(self):
-        gait_enable = self.stage_buf[:, 1]                                                          # 只在步态时才跟随y速度
-        has_swing = (self.contact_forces[:, self.feet_indices, 2] < 1.0).any(dim=1).float()         # 只有至少有一只脚离地后，才开始跟随y速度
-        lin_vel_y_error = torch.square(self.commands[:, 1]  - self.base_lin_vel[:, 1]) / 0.1
-        rew_vy = torch.exp(-lin_vel_y_error / self.cfg.rewards.tracking_sigma)
-        return rew_vy * gait_enable * has_swing
 
     def _reward_tracking_lin_vel_enhance(self):
+        # 计算期望线性速度与实际线性速度之间的误差
+        # lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel_head[:, 0])
+        # lin_vel_error = self.commands[:, 0] - self.base_lin_vel[:, 0]
+        # ans = self.rwd_linVelTrackEnhancedPrev + self.cfg.rewards.enhance_factor * lin_vel_error
+        # ans = torch.exp(-torch.square(ans) / self.cfg.rewards.tracking_sigma / 10)
+        # # 使用指数函数计算奖励，奖励值随着误差的减小而增加
+        # return ans
+
         # 计算期望线性速度与实际线性速度之间的误差
         lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0])
         # lin_vel_error = torch.square(self.commands[:, 0] - self.wheel_lin_vel)
@@ -1498,15 +1584,32 @@ class Y4B_2WHEEL(LeggedRobot):
         # return ans.clip(0, 1)  # Ensure the reward is non-negative
         return torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma / 10) - 1
     
+    # def _reward_tracking_lin_vel_y(self):
+    #     """
+    #     计算增强的线性速度跟踪奖励。
+
+    #     该方法通过计算期望线性速度与实际线性速度之间的误差，并使用指数函数来计算奖励。
+    #     奖励值随着误差的减小而增加，从而鼓励机器人更好地跟踪期望的线性速度。
+
+    #     Returns:
+    #         torch.Tensor: 增强的线性速度跟踪奖励。
+    #     """
+    #     # Tracking of linear velocity commands (x axes)
+    #     lin_vel_y_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1]) / 0.1
+    #     ans = torch.exp(-lin_vel_y_error / self.cfg.rewards.tracking_sigma)
+    #     return ans
+
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw)
         ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
+        # ang_vel_error = torch.square(self.commands[:, 2] - self.wheel_ang_vel)
         ans = torch.exp(-ang_vel_error / self.cfg.rewards.tracking_sigma)
         return ans
 
     def _reward_tracking_ang_vel_enhance(self):
         # Tracking of angular velocity commands (x axes)
         ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
+        # ang_vel_error = torch.square(self.commands[:, 2] - self.wheel_ang_vel)
         ans = self.rwd_angVelTrackEnhancedPrev + self.cfg.rewards.enhance_factor * ang_vel_error
         return ans.clip(0, 1)  # Ensure the reward is non-negative
 
@@ -1529,22 +1632,18 @@ class Y4B_2WHEEL(LeggedRobot):
             base_height_error = torch.square(self.base_height - self.commands[:, 3])
             ans = torch.exp(-base_height_error / 0.01)
         return ans
-    
     def _reward_ang_vel_xy(self):
         # Penalize xy axes base angular velocity
         return torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1)
-    
     def _reward_lin_vel_z(self):
         # Penalize z axis base linear velocity
         return torch.square(self.base_lin_vel[:, 2])
-    
     def _reward_orientation(self):
         """
         计算保持基座平坦方向的奖励。使用基座欧拉角和投影重力向量来惩罚与期望基座方向的偏差。
         """
         ans = torch.exp(-torch.sum(torch.square(self.projected_gravity[:, :2]) * 20, dim=1))
         return ans
-    
     def _reward_base_euler(self):
         ans = torch.exp(-torch.sum(torch.abs(self.base_euler_zyx[:, :2]), dim=1) / 0.1)
         return ans
@@ -1553,59 +1652,28 @@ class Y4B_2WHEEL(LeggedRobot):
         ans = torch.exp(-torch.abs(self.wheel_pos_left_local_x - self.wheel_pos_right_local_x) / 0.1)
         # print("4", torch.square(self.wheel_pos_left_local_x - self.wheel_pos_right_local_x))
         return ans
-
+    
+    def _reward_hip_pos(self):
+        return torch.sum(torch.square(self.dof_pos[:, [1,4]]), dim=1)
+    
     def _reward_feet_distance(self):
         # Penalize base height away from target
         feet_distance = torch.norm(
             self.wheel_pos[:, 0, :2] - self.wheel_pos[:, 1, :2],
             dim=-1,
         )
+        # reward = torch.clip(
+        #     self.cfg.rewards.min_feet_distance - feet_distance, 0, 1
+        # )
+        # return reward
         # 二值化惩罚：距离小于最小安全距离时惩罚为1，否则为0
         reward = torch.where(
             feet_distance < self.cfg.rewards.min_feet_distance,
-            torch.ones_like(feet_distance),                             # 距离不足时惩罚=1
-            torch.zeros_like(feet_distance),                            # 距离足够时惩罚=0
+            torch.ones_like(feet_distance),  # 距离不足时惩罚=1
+            torch.zeros_like(feet_distance),  # 距离足够时惩罚=0
         )
         return reward
-    
-    def _reward_hip_pos(self):
-        return torch.sum(torch.square(self.dof_pos[:, [1,4]]), dim=1)
 
-################## 步态控制 ##################
-    def _reward_enter_gait(self):                                       # 进入步态直接给奖励
-        enter_gait = (self.stage_buf[:,1] == 1) & (self.stage_time_buf < self.dt)
-        rew_enter = enter_gait.float() * 0.5
-        return rew_enter
-    
-    def _reward_contact(self): 
-        gait_enable  = self.stage_buf[:, 1]                             # 只在 gait
-        fz = self.contact_forces[:, self.feet_indices, 2]               # 接触力z,维度[N, 2]
-        is_stance = (self.leg_phase < 0.55).float()                     # 支撑脚和摆动脚,维度[N, 2]
-        stance_rew = is_stance * torch.clamp(fz / 50.0, 0, 1)           # 支撑脚力越大越好
-        swing_rew  = (1 - is_stance) * torch.exp(-fz / 5.0)             # 摆动脚力越小越好
-        rew_gait = torch.sum(stance_rew + swing_rew, dim=1)             # 步态奖励
-        # print("message:", torch.cat([gait_enable[0].unsqueeze(0),self.phase[0].unsqueeze(0), is_stance[0]], dim=0))
-        return rew_gait * gait_enable
-
-    def _reward_feet_swing_height(self):
-        gait_enable  = self.stage_buf[:, 1]                             # 只在 gait
-        z = self.wheel_pos[:, :, 2]                                     # 抬脚高度
-        fz = self.contact_forces[:, self.feet_indices, 2]               # 接触力z,维度[N, 2]
-        swing = (fz < 1.0).float()                                      # 摆动脚
-        z_min = self.cfg.asset.wheel_radius                             # 轮子半径
-        z_target = self.cfg.asset.gait_foot_height                      # 步态抬脚高度
-        base = torch.clamp(z - z_min, min=0.0)                          # 抬脚先给奖励
-        height_err = torch.abs(z - z_target)                            # 高度偏差惩罚（平滑）
-        height_penalty = torch.clamp(height_err, max=0.05)
-        rew = torch.sum((base - 0.5 * height_penalty) * swing, dim=1)   # 只对摆动脚起作用
-        return 2.0 * rew * gait_enable
-    
-    def _reward_contact_no_vel(self):
-        # Penalize contact with no velocity
-        contact = torch.norm(self.contact_forces[:, self.feet_indices, :3], dim=2) > 1.
-        contact_feet_vel = self.wheel_vel * contact.unsqueeze(-1)
-        penalize = torch.square(contact_feet_vel[:, :, 1:3])
-        return torch.sum(penalize, dim=(1,2))
     
 ################## 接触控制 ##################
     # def _reward_wheel_contact_force(self):

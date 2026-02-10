@@ -41,8 +41,8 @@ import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor
 
 
 class cmd:
-    vel_x = 0.0
-    vel_y = -0.0
+    vel_x = -0.0
+    vel_y = -0
     vel_yaw = 0
     height = 0.67
     heading = 0
@@ -186,6 +186,7 @@ def run_mujoco(policy, cfg):
 
     for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
         phase = (count_lowlevel * 0.01) % 0.6 / 0.6
+        gait_enable = 0
         # Obtain an observation
         q, dq, quat, v, omega, gvec = get_obs(data) # 获取17+16+4+3+3+3=46维的观测量
 
@@ -221,12 +222,13 @@ def run_mujoco(policy, cfg):
         obs[0, 14:17] = q[4:7] * cfg.normalization.obs_scales.dof_pos
         obs[0, 17:25] = dq * cfg.normalization.obs_scales.dof_vel
         obs[0, 25:33] = action
-        obs[0, 33] = np.sin(2 * np.pi * phase)
-        obs[0, 34] = np.cos(2 * np.pi * phase)
+        obs[0, 33] = gait_enable
+        obs[0, 34] = np.sin(2 * np.pi * phase) * gait_enable
+        obs[0, 35] = np.cos(2 * np.pi * phase) * gait_enable
 
-        obs[0,35]=v[0]
-        obs[0,36]=v[1]
-        obs[0,37]=v[2]
+        obs[0,36]=v[0]
+        obs[0,37]=v[1]
+        obs[0,38]=v[2]
         # obs[0,34:37]=base_euler_zyx
 
         obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
