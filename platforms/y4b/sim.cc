@@ -60,8 +60,16 @@ void MyController(const mjModel* m, mjData* d) {
   robot_model.vel_des_ = -0.0;
   robot_model.omega_des_ = 0.0;
   static double count_num = 0;
-  robot_model.phase_ = std::fmod(count_num * 0.01, 0.6) / 0.6;
-  std::cout << "phase_sim: " << robot_model.phase_ << std::endl;
+  static double count_num_plus = 0;
+  if(count_num > 2000 && count_num <= 10000){
+    robot_model.gait_enable_ = true;
+    robot_model.phase_ = std::fmod(count_num_plus * 0.01, 0.6) / 0.6;
+    count_num_plus++;
+  }else if(count_num > 10000){
+    robot_model.gait_enable_ = false;
+    robot_model.phase_ = 0;
+    count_num_plus = 0;
+  }
   count_num += 1;
  
 
@@ -70,7 +78,7 @@ void MyController(const mjModel* m, mjData* d) {
   Eigen::VectorXd tau_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6); // 初始化力矩命令向量
   tau_cmd = fsm.tau();
   pos_cmd = fsm.pos();
-  std::cout << "tau_cmd:" << tau_cmd << std::endl;
+  // std::cout << "tau_cmd:" << tau_cmd << std::endl;
 
   for (size_t i = 0; i < robot_model.pino_model().nv-6; i++) {
     d->ctrl[i] = tau_cmd[i];

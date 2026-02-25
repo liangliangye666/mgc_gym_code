@@ -9,44 +9,45 @@
 
 #define _USE_MATH_DEFINES
 #include <cmath>
-
+//加载urdf并初始化robot_model和fsm
 std::string urdf_path = "/sim/model/y4b/urdf/y4burdf20260114.urdf";
 y4b::RobotModel robot_model(urdf_path);
 y4b::FSM fsm(robot_model);
-bool isCtrl = false;
 
+//控制周期观测
 double call_time_ms = 0.0;  // Initialize time_ms to 0.0
-double flag = 0;
 auto last_time = std::chrono::high_resolution_clock::now();
-
+//控制信号声明及初始化,期望速度/角速度/运行强化学习算法
 struct CtlSigs {
   double vel_des;
   double omega_des;
-  bool rl_run;  // 模态切换
-};  // 控制信号
-CtlSigs ctlSigs{0.0, 0.0, false};
+  bool rl_run;          //运行强化学习算法
+  bool gait_enable;     //步态使能
+  double gait_phase;    //步态相位
+  double gait_counter;  //步态相位计数器
+}; 
+CtlSigs ctlSigs{0.0, 0.0, false, false, 0.0, 0.0};
+//手柄信号处理,速度信号平滑,观测值处理函数声明
 void handleSigs_processing(standmode_output_t* standmode_output, const standmode_input_t* standmode_input, CtlSigs* ctlSigs, y4b::FSM* fsm);
 float updateWithSmartBrake(float current, float target, float a_up, float a_down, float dt);
-
-void DisplayObservedValue(standmode_output_t* standmode_output, const Eigen::VectorXd& observed_value);
-
+void displayObservedValue(standmode_output_t* standmode_output, const Eigen::VectorXd& observed_value);
+//重启算法初始化函数
 void standMode_initialize(standmode_output_t* standmode_output, standmode_input_t* standmode_input) {
   FLAGS_logtostderr = 1;
   FLAGS_colorlogtostderr = 1;
   robot_model.Initialize();
   fsm.Initialize(robot_model);
   ctlSigs.rl_run = false;
-  isCtrl = false;
+  ctlSigs.gait_enable = false;
   return;
 }
-
-void SetParameters(standmode_output_t* standmode_output, standmode_input_t* standmode_input) {
-  // 使能
+//设置电机参数
+void setMotorParameters(standmode_output_t* standmode_output, standmode_input_t* standmode_input) {
+  // 全部电机使能
   standmode_output->joints_cmd.joint_h_pitch_l.enable = 1;
   standmode_output->joints_cmd.joint_h_roll_l.enable = 1;
   standmode_output->joints_cmd.joint_k_pitch_l.enable = 1;
   standmode_output->joints_cmd.joint_w_pitch_l.enable = 1;
-
   standmode_output->joints_cmd.joint_h_pitch_r.enable = 1;
   standmode_output->joints_cmd.joint_h_roll_r.enable = 1;
   standmode_output->joints_cmd.joint_k_pitch_r.enable = 1;
@@ -57,19 +58,17 @@ void SetParameters(standmode_output_t* standmode_output, standmode_input_t* stan
   // standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 1;
   // standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 4;
   // standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 4;
-
   // standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 4;
   // standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 1;
   // standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 4;
   // standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 4;
-
+  //轮子力矩模式,其他关节电机力位混合模式
   standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 11;
-  standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 1;
+  standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 11;
   standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 11;
   standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 4;
-
   standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 11;
-  standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 1;
+  standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 11;
   standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 11;
   standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 4;
 }
@@ -79,118 +78,81 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
   auto call_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(call_time - last_time);
   double call_time_ns = call_duration.count();
   call_time_ms = call_time_ns / 1000000;
-
   last_time = call_time;
 
-  SetParameters(standmode_output, standmode_input);
-
-  robot_model.UpdateRealJointStates(standmode_output, standmode_input);
-  robot_model.UpdateModel();
-  handleSigs_processing(standmode_output, standmode_input, &ctlSigs, &fsm);  // 手柄信号处理
-  robot_model.vel_des_ = updateWithSmartBrake(robot_model.vel_des_, ctlSigs.vel_des, 0.5, 1.5, robot_model.control_dt);
+  setMotorParameters(standmode_output, standmode_input);                                                                //设置电机参数
+  robot_model.UpdateRealJointStates(standmode_output, standmode_input);                                                 //更新反馈关节状态
+  robot_model.UpdateModel();                                                                                            //更新模型
+  handleSigs_processing(standmode_output, standmode_input, &ctlSigs, &fsm);                                             //处理手柄信号
+  robot_model.vel_des_ = updateWithSmartBrake(robot_model.vel_des_, ctlSigs.vel_des, 0.5, 1.5, robot_model.control_dt); //获取期望速度与角速度
   // robot_model.vel_des_ = ctlSigs.vel_des;
   robot_model.omega_des_ = ctlSigs.omega_des;
-  Eigen::VectorXd tau_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd pos_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd vel_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd tau_joint = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd pos_fb_kp = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd pos_fb_kd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
+  robot_model.gait_enable_ = ctlSigs.gait_enable;
+  robot_model.phase_ = ctlSigs.gait_phase;
+  Eigen::VectorXd tau_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);         //下发的期望力矩命令
+  Eigen::VectorXd pos_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);         //下发的期望位置命令
+  Eigen::VectorXd vel_cmd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);         //下发的速度命令
+  Eigen::VectorXd pos_fb_kp = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);       //力位混合模式下,各关节的位置误差kp参数
+  Eigen::VectorXd pos_fb_kd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);       //力位混合模式下,各关节的位置误差kd参数
 
-  Eigen::VectorXd tau_gravity = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd tau_fsm = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd pos_fsm = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd kp = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd kd = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd qDes = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  Eigen::VectorXd qdotDes = Eigen::VectorXd::Zero(robot_model.pino_model().nv-6);
-  tau_gravity << -0.037, -13.015, 0.0, -0.037, -13.015, 0.0;
-  qDes << -0.349, 0.542, 0.0, -0.349, 0.542, 0.0;
-  qdotDes << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
-  kp << 100.0, 100.0, 0.0, 100.0, 100.0, 0.0;
-  kd << 1.0, 0.8, 1.0, 1.0, 0.8, 1.0;
+  fsm.Run(robot_model);                           //运行状态机,更新控制策略
+  tau_cmd = fsm.tau();                            //获取下发期望力矩命令
+  pos_cmd = fsm.pos();                            //获取下发期望位置命令
+  pos_fb_kp = fsm.pos_fb_kp_;                     //获取各关节位置误差kp参数
+  pos_fb_kd = fsm.pos_fb_kd_;                     //获取各关节位置误差kd参数
 
-  // if (ctlSigs.rl_run && !isCtrl) {
-  //   isCtrl = true;
-  //   std::cout << "Start walk" << std::endl;
-  // }
+  robot_model.observed_value[1] = tau_cmd[0];     //观测力矩值
+  robot_model.observed_value[2] = tau_cmd[1];
+  robot_model.observed_value[3] = tau_cmd[2];
+  robot_model.observed_value[4] = tau_cmd[3];
+  robot_model.observed_value[5] = tau_cmd[4];
+  robot_model.observed_value[6] = tau_cmd[5];
 
-  // for (int i = 0; i < robot_model.pino_model().nv-6; i++) {
-  //   tau_joint(i) = tau_gravity(i) + kp(i) * (qDes(i) - robot_model.q_rpy(6 + i)) + kd(i) * (qdotDes(i) - robot_model.qdot(6 + i));
-  // }
-  // flag = 0;
-
-  // if (isCtrl) {
-    fsm.Run(robot_model);
-    tau_fsm = fsm.tau();
-    pos_fsm = fsm.pos();
-    tau_cmd = tau_fsm;
-    pos_cmd = pos_fsm;
-    pos_fb_kp = fsm.pos_fb_kp_;
-    pos_fb_kd = fsm.pos_fb_kd_;
-    flag = 1.0;
-    robot_model.observed_value[1] = tau_cmd[0];
-    robot_model.observed_value[2] = tau_cmd[1];
-    robot_model.observed_value[3] = tau_cmd[2];
-    robot_model.observed_value[4] = tau_cmd[3];
-    robot_model.observed_value[5] = tau_cmd[4];
-    robot_model.observed_value[6] = tau_cmd[5];
-    // std::cout << "fsm is running!" << std::endl;
-  // } else {
-  //   tau_cmd << tau_joint;
-  //   pos_cmd = qDes;
-  //   vel_cmd = qdotDes;
-  // }
   standmode_output->joints_cmd.joint_h_pitch_l.KP = pos_fb_kp[static_cast<int>(y4b::Joints::left_hip_pitch_joint)];
-  standmode_output->joints_cmd.joint_h_roll_l.KP = 0;
+  standmode_output->joints_cmd.joint_h_roll_l.KP = pos_fb_kp[static_cast<int>(y4b::Joints::left_hip_roll_joint)];
   standmode_output->joints_cmd.joint_k_pitch_l.KP = pos_fb_kp[static_cast<int>(y4b::Joints::left_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_l.KP = 0;
   standmode_output->joints_cmd.joint_h_pitch_r.KP = pos_fb_kp[static_cast<int>(y4b::Joints::right_hip_pitch_joint)];
-  standmode_output->joints_cmd.joint_h_roll_r.KP = 0;
+  standmode_output->joints_cmd.joint_h_roll_r.KP = pos_fb_kp[static_cast<int>(y4b::Joints::right_hip_roll_joint)];
   standmode_output->joints_cmd.joint_k_pitch_r.KP = pos_fb_kp[static_cast<int>(y4b::Joints::right_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_r.KP = 0;
 
   standmode_output->joints_cmd.joint_h_pitch_l.KD = pos_fb_kd[static_cast<int>(y4b::Joints::left_hip_pitch_joint)];
-  standmode_output->joints_cmd.joint_h_roll_l.KD = 0;
+  standmode_output->joints_cmd.joint_h_roll_l.KD = pos_fb_kd[static_cast<int>(y4b::Joints::left_hip_roll_joint)];
   standmode_output->joints_cmd.joint_k_pitch_l.KD = pos_fb_kd[static_cast<int>(y4b::Joints::left_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_l.KD = 0;
   standmode_output->joints_cmd.joint_h_pitch_r.KD = pos_fb_kd[static_cast<int>(y4b::Joints::right_hip_pitch_joint)];
-  standmode_output->joints_cmd.joint_h_roll_r.KD = 0;
+  standmode_output->joints_cmd.joint_h_roll_r.KD = pos_fb_kd[static_cast<int>(y4b::Joints::right_hip_roll_joint)];
   standmode_output->joints_cmd.joint_k_pitch_r.KD = pos_fb_kd[static_cast<int>(y4b::Joints::right_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_r.KD = 0;
 
   standmode_output->joints_cmd.joint_h_pitch_l.pos_cmd = pos_cmd[static_cast<int>(y4b::Joints::left_hip_pitch_joint)];
-  standmode_output->joints_cmd.joint_h_roll_l.pos_cmd = 0;
+  standmode_output->joints_cmd.joint_h_roll_l.pos_cmd = pos_cmd[static_cast<int>(y4b::Joints::left_hip_roll_joint)];
   standmode_output->joints_cmd.joint_k_pitch_l.pos_cmd = pos_cmd[static_cast<int>(y4b::Joints::left_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_l.vel_cmd = 0;
   standmode_output->joints_cmd.joint_h_pitch_r.pos_cmd = pos_cmd[static_cast<int>(y4b::Joints::right_hip_pitch_joint)];
-  standmode_output->joints_cmd.joint_h_roll_r.pos_cmd = 0;
+  standmode_output->joints_cmd.joint_h_roll_r.pos_cmd = pos_cmd[static_cast<int>(y4b::Joints::right_hip_roll_joint)];
   standmode_output->joints_cmd.joint_k_pitch_r.pos_cmd = pos_cmd[static_cast<int>(y4b::Joints::right_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_r.vel_cmd = 0;
 
   // torque
   standmode_output->joints_cmd.joint_h_pitch_l.torque_cmd = tau_cmd[static_cast<int>(y4b::Joints::left_hip_pitch_joint)];
-  // standmode_output->joints_cmd.joint_h_roll_l.torque_cmd =
-  //     tau_cmd[static_cast<int>(y4b::Joints::left_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_roll_l.torque_cmd = tau_cmd[static_cast<int>(y4b::Joints::left_hip_roll_joint)];
   standmode_output->joints_cmd.joint_k_pitch_l.torque_cmd = tau_cmd[static_cast<int>(y4b::Joints::left_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_l.torque_cmd = tau_cmd[static_cast<int>(y4b::Joints::left_wheel_joint)];
 
   standmode_output->joints_cmd.joint_h_pitch_r.torque_cmd = tau_cmd[static_cast<int>(y4b::Joints::right_hip_pitch_joint)];
-  // standmode_output->joints_cmd.joint_h_roll_r.torque_cmd =
-  //     tau_cmd[static_cast<int>(y4b::Joints::right_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_roll_r.torque_cmd = tau_cmd[static_cast<int>(y4b::Joints::right_hip_roll_joint)];
   standmode_output->joints_cmd.joint_k_pitch_r.torque_cmd = tau_cmd[static_cast<int>(y4b::Joints::right_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_r.torque_cmd = tau_cmd[static_cast<int>(y4b::Joints::right_wheel_joint)];
 
   // record data
-  DisplayObservedValue(standmode_output, robot_model.observed_value);
+  displayObservedValue(standmode_output, robot_model.observed_value);
 
   auto end_time = std::chrono::high_resolution_clock::now();
   auto step_duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - call_time);
   double step_time_ns = step_duration.count();
   double step_time_ms = step_time_ns / 1000000;
-
-  // ros_publisher->Publish("y4b/physics_robot/time/stand_mode_time_ms", call_time_ms);
-  // ros_publisher->Publish("y4b/physics_robot/time/step_time_ms", step_time_ms);
 }
 
 void standMode_terminate(void) { return; }
@@ -243,13 +205,22 @@ void handleSigs_processing(standmode_output_t* standmode_output, const standmode
   if (std::abs(standmode_input->Handle_signals.a1 - 0.5) <= 0.1 || handle_LB) {
     ctlSigs->vel_des = 0.0;
   } else {
-    ctlSigs->vel_des = (standmode_input->Handle_signals.a1 - 0.5) * (-1.0) * handle_LT;
+    ctlSigs->vel_des = (standmode_input->Handle_signals.a1 - 0.5) * (-1.0) * handle_LT * 0.5;
   }
 
   if (std::abs(standmode_input->Handle_signals.a3 - 0.5) <= 0.1 || handle_RB) {
     ctlSigs->omega_des = 0.0;
   } else {
-    ctlSigs->omega_des = (standmode_input->Handle_signals.a3 - 0.5) * (-1.0) * handle_LT;
+    ctlSigs->omega_des = (standmode_input->Handle_signals.a3 - 0.5) * (-1.0) * handle_LT * 0.5;
+  }
+
+  if (handle_RT) {
+    ctlSigs->gait_enable = true;
+    ctlSigs->gait_phase = std::fmod(ctlSigs->gait_counter * 0.01, 0.6) / 0.6;
+    ctlSigs->gait_counter += 1;
+  } else {
+    ctlSigs->gait_enable = false;
+    ctlSigs->gait_counter = 0;
   }
 
   // 定义模态切换按钮
@@ -259,7 +230,7 @@ void handleSigs_processing(standmode_output_t* standmode_output, const standmode
 
 }
 
-void DisplayObservedValue(standmode_output_t* standmode_output, const Eigen::VectorXd& observed_value) {
+void displayObservedValue(standmode_output_t* standmode_output, const Eigen::VectorXd& observed_value) {
   standmode_output->observed_value.channel_1 = observed_value[1];
   standmode_output->observed_value.channel_2 = observed_value[2];
   standmode_output->observed_value.channel_3 = observed_value[3];

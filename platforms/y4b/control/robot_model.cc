@@ -68,6 +68,7 @@ void RobotModel::Initialize() {
   vel_des_ = 0;
   omega_des_ = 0;
   phase_ = 0;
+  gait_enable_ = false;
 
   R_HW = Eigen::Matrix3d::Identity();
   R_WH = Eigen::Matrix3d::Identity();

@@ -124,6 +124,7 @@ class RobotModel {
   double vel_des_;
   double omega_des_;
   double phase_;
+  bool gait_enable_;
   // Robot states
   double control_dt;
   Eigen::VectorXd q_rpy;

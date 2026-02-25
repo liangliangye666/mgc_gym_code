@@ -105,17 +105,19 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         basic_max_curriculum = 1.5 # 不同阶段的课程学习的难度值
         advanced_max_curriculum = 2 # 高级阶段的最大课程难度值
         curriculum_threshold = 0.7 # 课程学习的阈值
-        num_commands = 6 # 命令的数量
         resampling_time = 10.0  # time before command are changed[s],重新采样命令的时间间隔
         heading_command = False  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
-
+        num_commands = 6 # 命令的数量
         class ranges: # 定义了每个命令可以取值的范围
             lin_vel_x = [-0.5, 0.5]     # min max [m/s],线速度命令范围
             lin_vel_y = [-0.5, 0.5]
             ang_vel_yaw = [-0.5, 0.5]   # 角速度命令范围
             height = [0.657, 0.687]     # 高度范围上下浮动3cm
             heading = [-3.14, 3.14]     # 朝向范围
-            gait = [0, 1]               # 步态命令
+            mode_normalization = [0, 1] # 模式归一化,暂时两个模式-步态占比0.8,两轮平衡占比0.2
+        gait_train_proportion = 0.8     # 训练步态的环境占比
+        gait_foot_height = 0.18
+        gait_period = 0.6 
 
     class control(LeggedRobotCfg.control):
         # 位置动作的缩放系数
@@ -142,8 +144,6 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         joint_link_indices = [1, 2, 3, 5, 6, 7]
         wheel_link_indices = [4, 8]
         wheel_radius = 0.1
-        gait_foot_height = 0.15
-        gait_period = 0.6 
         track_width = 0.166*2
         penalize_contacts_on = ["right_hip", "right_knee", "base", "left_hip", "left_knee"] # 惩罚区域
         terminate_after_contacts_on = ["base"] # 终止区域
@@ -194,7 +194,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             lin_vel = 2.0
             lin_vel_y = 2.0
             ang_vel = 0.25  # 0.25
-            gait = 1.0
+            gait = 2.0
             dof_pos = 1.0
             dof_vel = 0.05
             dof_acc = 0.0025
@@ -229,7 +229,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             # 速度跟踪
             tracking_lin_vel_x = 1
             # tracking_lin_vel_enhance = 1
-            tracking_lin_vel_y = 2
+            tracking_lin_vel_y = 5
             tracking_ang_vel = 1
 
             # 姿态控制
@@ -238,12 +238,14 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             orientation = 1 # 基座重力投影方向
             # base_euler = 1
             leg_end_x_diff = 1 # 两条腿不要叉开
-            hip_pos = -1
+            hip_pos = -2
             feet_distance = -2
             contact = 10
             feet_swing_height = 100.0
             contact_no_vel = -5
-            enter_gait = 0.5
+            enter_gait = 10
+            gait_no_wheel_vel = 10
+            # gait_no_wheel_torque =100
 
             # 轮与地面接触
             # wheel_contact_force = 1 # 1 #-1e-3 # 两前轮与地面接触,两后轮与地面分离
@@ -290,7 +292,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
 
         # 接触力
         min_wheel_contact_force = 20.0
-        min_feet_distance = 0.3
+        min_feet_distance = 0.332
     class sim(LeggedRobotCfg.sim):
         dt = 0.005  # 模拟时间步长 [秒]
         substeps = 1  # 每个时间步的子步数

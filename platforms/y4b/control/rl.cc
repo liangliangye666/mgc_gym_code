@@ -5,7 +5,7 @@ RL::RL(RobotModel& robot_model) {
   // FLAGS_logtostderr = 1;
   // FLAGS_colorlogtostderr = 1;
 
-  num_obs_ = 35;                                   // 观测值数目,输入到actor网络
+  num_obs_ = 36;                                   // 观测值数目,输入到actor网络
   num_actions_ = robot_model.pino_model().nv - 6;  // 自由度数目,输出到电机执行
   hist_len_ = 5;                                   // 历史观测长度,输入到critic和actor网络
   num_est_ = 3;                                    // 估计状态数目,输入到critic和actor网络
@@ -212,9 +212,9 @@ void RL::Run(RobotModel& robot_model) {
   obs_[23] = vel[static_cast<int>(Joints::right_knee_joint)] * obs_scales_dof_vel_;
   obs_[24] = vel[static_cast<int>(Joints::right_wheel_joint)] * obs_scales_dof_vel_;
   obs_.segment(25, 8) = actions_;
-  obs_[33] = sin(2 * M_PI * robot_model.phase_);
-  std::cout << "phase:" << robot_model.phase_ << "obs:" << obs_[33]<< std::endl;
-  obs_[34] = cos(2 * M_PI * robot_model.phase_);
+  obs_[33] = robot_model.gait_enable_;
+  obs_[34] = sin(2 * M_PI * robot_model.phase_) * robot_model.gait_enable_;
+  obs_[35] = cos(2 * M_PI * robot_model.phase_) * robot_model.gait_enable_;
   obs_ = obs_.cwiseMin(clip_obs_).cwiseMax(-clip_obs_);
 
   robot_model.observed_value[7] = obs_[0];

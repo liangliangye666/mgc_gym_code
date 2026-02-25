@@ -71,7 +71,7 @@ bool FSM::CheckSafety(RobotModel& robot_model) {
       LOG(ERROR) << "q of Joint " << robot_model.GetJointString(index) << " is out of range!"
                  << " q is " << robot_model.q_rpy[index] << "\n";
       LOG(ERROR) << "Robot is in unsafe state!!!";
-      // EDamp_signal_ = true;
+      EDamp_signal_ = true;
       return EDamp_signal_;
     }
     if (robot_model.qdot[index] < limit.qdot_min || robot_model.qdot[index] > limit.qdot_max) {

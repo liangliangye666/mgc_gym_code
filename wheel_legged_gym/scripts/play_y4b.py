@@ -119,10 +119,11 @@ def play(args):
         else:
             actions = policy(obs.detach())
 
-        env.commands[:, 0] = 0.0  # lin_vel
-        env.commands[:, 1] = 0  # ang_vel
-        env.commands[:, 2] = 0 # height
-        env.commands[:, 3] = 0.667
+        env.commands[:, 0] = 0.0    # lin_vel_x
+        env.commands[:, 1] = 0      # lin_vel_y
+        env.commands[:, 2] = 0      # ang_vel
+        env.commands[:, 3] = 0.667  # height
+        env.commands[:, 5] = 0.9    # gait_resample
 
         if i > 300 and i<=1500:
             vel_cmd[:] = env.commands[:, 0] * np.clip((i - 300) * 0.05, 0, 1)
