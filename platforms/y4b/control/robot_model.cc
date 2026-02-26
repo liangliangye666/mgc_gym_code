@@ -311,25 +311,21 @@ void RobotModel::PublishRobotStates() {
   Eigen::VectorXd tau_fb = Eigen::VectorXd::Zero(pino_model_.nv - 6);
   current_fb[0] = standmode_input_->joints_status.joint_h_pitch_l.current_fb;
   current_fb[1] = standmode_input_->joints_status.joint_h_roll_l.current_fb;
-  current_fb[2] = standmode_input_->joints_status.joint_h_yaw_l.current_fb;
-  current_fb[3] = standmode_input_->joints_status.joint_k_pitch_l.current_fb;
-  current_fb[4] = standmode_input_->joints_status.joint_w_pitch_l.current_fb;
-  current_fb[5] = standmode_input_->joints_status.joint_h_pitch_r.current_fb;
-  current_fb[6] = standmode_input_->joints_status.joint_h_roll_r.current_fb;
-  current_fb[7] = standmode_input_->joints_status.joint_h_yaw_r.current_fb;
-  current_fb[8] = standmode_input_->joints_status.joint_k_pitch_r.current_fb;
-  current_fb[9] = standmode_input_->joints_status.joint_w_pitch_r.current_fb;
+  current_fb[2] = standmode_input_->joints_status.joint_k_pitch_l.current_fb;
+  current_fb[3] = standmode_input_->joints_status.joint_w_pitch_l.current_fb;
+  current_fb[4] = standmode_input_->joints_status.joint_h_pitch_r.current_fb;
+  current_fb[5] = standmode_input_->joints_status.joint_h_roll_r.current_fb;
+  current_fb[6] = standmode_input_->joints_status.joint_k_pitch_r.current_fb;
+  current_fb[7] = standmode_input_->joints_status.joint_w_pitch_r.current_fb;
 
   tau_fb[0] = standmode_input_->joints_status.joint_h_pitch_l.current_fb * 2.1;
   tau_fb[1] = standmode_input_->joints_status.joint_h_roll_l.current_fb * 2.1;
-  tau_fb[2] = standmode_input_->joints_status.joint_h_yaw_l.current_fb * 2.1;
-  tau_fb[3] = standmode_input_->joints_status.joint_k_pitch_l.current_fb * 2.1;
-  tau_fb[4] = standmode_input_->joints_status.joint_w_pitch_l.current_fb * 2.35;
-  tau_fb[5] = standmode_input_->joints_status.joint_h_pitch_r.current_fb * 2.1;
-  tau_fb[6] = standmode_input_->joints_status.joint_h_roll_r.current_fb * 2.1;
-  tau_fb[7] = standmode_input_->joints_status.joint_h_yaw_r.current_fb * 2.1;
-  tau_fb[8] = standmode_input_->joints_status.joint_k_pitch_r.current_fb * 2.1;
-  tau_fb[9] = standmode_input_->joints_status.joint_w_pitch_r.current_fb * 2.35;
+  tau_fb[2] = standmode_input_->joints_status.joint_k_pitch_l.current_fb * 2.1;
+  tau_fb[3] = standmode_input_->joints_status.joint_w_pitch_l.current_fb * 2.35;
+  tau_fb[4] = standmode_input_->joints_status.joint_h_pitch_r.current_fb * 2.1;
+  tau_fb[5] = standmode_input_->joints_status.joint_h_roll_r.current_fb * 2.1;
+  tau_fb[6] = standmode_input_->joints_status.joint_k_pitch_r.current_fb * 2.1;
+  tau_fb[7] = standmode_input_->joints_status.joint_w_pitch_r.current_fb * 2.35;
 
   // ros_publisher_->Publish("l4a/model/current_fb", current_fb);
   // ros_publisher_->Publish("l4a/model/tau_fb", tau_fb);
