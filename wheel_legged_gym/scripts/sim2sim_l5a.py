@@ -42,7 +42,7 @@ import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor
 
 class cmd:
     vel_x = -0.0
-    vel_y = -0.0
+    vel_y = 0.0
     vel_yaw = 0.0
     height = 0.651
     heading = 0

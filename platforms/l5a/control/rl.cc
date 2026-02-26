@@ -195,20 +195,20 @@ void RL::Run(RobotModel& robot_model) {
   obs_[8] = (0 - 0.0) * obs_scales_lin_vel_y_;
   obs_[9] = (robot_model.omega_des_ + omega_com_) * obs_scales_ang_vel_;
 #endif
-  obs_[10] = 0.67 * 12.0;
-  obs_[11] = pos[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_pos_;
-  obs_[12] = pos[static_cast<int>(Joints::left_hip_roll_joint)] * obs_scales_dof_pos_;
+  obs_[10] = 0.651 * 12.0;
+  obs_[11] = pos[static_cast<int>(Joints::left_hip_roll_joint)] * obs_scales_dof_pos_;
+  obs_[12] = pos[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_pos_;
   obs_[13] = pos[static_cast<int>(Joints::left_knee_joint)] * obs_scales_dof_pos_;
-  obs_[14] = pos[static_cast<int>(Joints::right_hip_pitch_joint)] * obs_scales_dof_pos_;
-  obs_[15] = pos[static_cast<int>(Joints::right_hip_roll_joint)] * obs_scales_dof_pos_;
+  obs_[14] = pos[static_cast<int>(Joints::right_hip_roll_joint)] * obs_scales_dof_pos_;
+  obs_[15] = pos[static_cast<int>(Joints::right_hip_pitch_joint)] * obs_scales_dof_pos_;
   obs_[16] = pos[static_cast<int>(Joints::right_knee_joint)] * obs_scales_dof_pos_;
   // 关节速度
-  obs_[17] = vel[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_vel_;
-  obs_[18] = vel[static_cast<int>(Joints::left_hip_roll_joint)] * obs_scales_dof_vel_;
+  obs_[17] = vel[static_cast<int>(Joints::left_hip_roll_joint)] * obs_scales_dof_vel_;
+  obs_[18] = vel[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_vel_;
   obs_[19] = vel[static_cast<int>(Joints::left_knee_joint)] * obs_scales_dof_vel_;
   obs_[20] = vel[static_cast<int>(Joints::left_wheel_joint)] * obs_scales_dof_vel_;
-  obs_[21] = vel[static_cast<int>(Joints::right_hip_pitch_joint)] * obs_scales_dof_vel_;
-  obs_[22] = vel[static_cast<int>(Joints::right_hip_roll_joint)] * obs_scales_dof_vel_;
+  obs_[21] = vel[static_cast<int>(Joints::right_hip_roll_joint)] * obs_scales_dof_vel_;
+  obs_[22] = vel[static_cast<int>(Joints::right_hip_pitch_joint)] * obs_scales_dof_vel_;
   obs_[23] = vel[static_cast<int>(Joints::right_knee_joint)] * obs_scales_dof_vel_;
   obs_[24] = vel[static_cast<int>(Joints::right_wheel_joint)] * obs_scales_dof_vel_;
   obs_.segment(25, 8) = actions_;
