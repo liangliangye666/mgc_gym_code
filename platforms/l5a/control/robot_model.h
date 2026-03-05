@@ -117,7 +117,8 @@ class RobotModel {
   std::string GetJointString(int index);
 
   // Robot cmds
-  double vel_des_;
+  double vel_x_des_;
+  double vel_y_des_;
   double omega_des_;
   double phase_;
   bool gait_enable_;

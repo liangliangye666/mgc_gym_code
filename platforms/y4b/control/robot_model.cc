@@ -65,7 +65,8 @@ void RobotModel::Initialize() {
 
   S.block(0, 6, pino_model_.nv - 6, pino_model_.nv - 6) = Eigen::MatrixXd::Identity(pino_model_.nv - 6, pino_model_.nv - 6);
   S_transpose_pinv = (S * S.transpose()).inverse() * S;
-  vel_des_ = 0;
+  vel_x_des_ = 0;
+  vel_y_des_ = 0;
   omega_des_ = 0;
   phase_ = 0;
   gait_enable_ = false;

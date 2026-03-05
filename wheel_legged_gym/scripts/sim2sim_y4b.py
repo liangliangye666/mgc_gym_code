@@ -41,8 +41,8 @@ import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor
 
 
 class cmd:
-    vel_x = -0.0
-    vel_y = -0.0
+    vel_x = -0.0 
+    vel_y = 0.0
     vel_yaw = 0.0
     height = 0.67
     heading = 0
@@ -182,16 +182,20 @@ def run_mujoco(policy, cfg):
     action = np.zeros((cfg.env.num_actions), dtype=np.double)
 
     count_lowlevel = 0
+    count_gait = 0
 
 
     for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
-        phase = (count_lowlevel * 0.01) % 0.6 / 0.6
         if count_lowlevel < 1000:
+            count_gait = 0
             gait_enable = 0
         elif count_lowlevel < 3000:
+            count_gait += 1
             gait_enable = 1
         else:
+            count_gait = 0
             gait_enable = 0
+        phase = (count_gait * 0.01) % cfg.commands.gait_period / cfg.commands.gait_period
         # Obtain an observation
         q, dq, quat, v, omega, gvec = get_obs(data) # 获取17+16+4+3+3+3=46维的观测量
 

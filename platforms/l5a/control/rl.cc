@@ -24,7 +24,8 @@ RL::RL(RobotModel& robot_model) {
 
   forward_back_error_ = 0.0;
   left_right_error_ = 0.0;
-  lin_vel_com_ = 0.0;
+  lin_vel_x_com_ = 0.0;
+  lin_vel_y_com_ = 0.0;
   omega_com_ = 0.0;
 
   kp_joints_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);
@@ -187,12 +188,12 @@ void RL::Run(RobotModel& robot_model) {
     obs_[i] = robot_model.q_pino[i] * obs_scales_quat_;  // quat
   }
 #if SIM_ENABLE
-  obs_[7] = robot_model.vel_des_ * obs_scales_lin_vel_;
-  obs_[8] = (0 - 0.0) * obs_scales_lin_vel_y_;
+  obs_[7] = robot_model.vel_x_des_ * obs_scales_lin_vel_;
+  obs_[8] = (robot_model.vel_y_des_ - 0.0) * obs_scales_lin_vel_y_;
   obs_[9] = robot_model.omega_des_ * obs_scales_ang_vel_;
 #else
-  obs_[7] = (robot_model.vel_des_ + lin_vel_com_) * obs_scales_lin_vel_;
-  obs_[8] = (0 - 0.0) * obs_scales_lin_vel_y_;
+  obs_[7] = (robot_model.vel_x_des_ + lin_vel_x_com_) * obs_scales_lin_vel_;
+  obs_[8] = (robot_model.vel_y_des_ + lin_vel_y_com_) * obs_scales_lin_vel_y_;
   obs_[9] = (robot_model.omega_des_ + omega_com_) * obs_scales_ang_vel_;
 #endif
   obs_[10] = 0.651 * 12.0;
@@ -240,7 +241,7 @@ void RL::Run(RobotModel& robot_model) {
   robot_model.observed_value[26] = obs_[19];
   robot_model.observed_value[27] = obs_[20];
 
-  robot_model.observed_value[28] = robot_model.vel_des_;
+  robot_model.observed_value[28] = robot_model.vel_x_des_;
   robot_model.observed_value[29] = robot_model.omega_des_;
 
 
@@ -393,7 +394,8 @@ void RL::LoadParameters() {
   model_est_ = config_["model"]["estimator"].as<std::string>();
   model_ctrl_ = config_["model"]["controller"].as<std::string>();
   model_scan_encoder_ = config_["model"]["scan_encoder"].as<std::string>();
-  lin_vel_com_ = config_["lin_vel_com"].as<double>();
+  lin_vel_x_com_ = config_["lin_vel_x_com"].as<double>();
+  lin_vel_y_com_ = config_["lin_vel_y_com"].as<double>();
   omega_com_ = config_["omega_com"].as<double>();
 }
 

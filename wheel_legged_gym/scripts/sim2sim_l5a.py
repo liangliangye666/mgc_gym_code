@@ -36,7 +36,7 @@ from tqdm import tqdm # 进度条可视化工具,适合监控长时间运行的�
 from collections import deque # 导入双端队列数据结构,高效存储历史状态数据,用于强化学习的经验回放机制
 from scipy.spatial.transform import Rotation as R # 导入SciPy旋转变换工具,处理3D旋转问题(四元数/欧拉角/旋转矩阵转换)
 from wheel_legged_gym import WHEEL_LEGGED_GYM_ROOT_DIR # 导入自定义路径常量
-from wheel_legged_gym.envs import Y4B_2WHEEL_Cfg # 导入机器人环境配置类作为父类
+from wheel_legged_gym.envs import L5A_2WHEEL_Cfg # 导入机器人环境配置类作为父类
 import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor-Critic架构),自动求导训练强化学习模型,GPU加速仿真数据处理(如状态特征提取)
 
 
@@ -276,7 +276,7 @@ if __name__ == "__main__":
     parser.add_argument("--terrain", action="store_true", help="terrain or plane") # 如果命令行中包含此参数,则值为True,否则为False,帮助信息说明地形
     args = parser.parse_args() # 解析命令行传入的参数,并将结果存储在args对象中
 
-    class Sim2simCfg(Y4B_2WHEEL_Cfg): # 定义仿真配置类,继承自基础配置
+    class Sim2simCfg(L5A_2WHEEL_Cfg): # 定义仿真配置类,继承自基础配置
 
         class sim_config:
             if args.terrain:

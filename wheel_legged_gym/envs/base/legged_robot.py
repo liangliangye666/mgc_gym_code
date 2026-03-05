@@ -1248,6 +1248,7 @@ class LeggedRobot(BaseTask):
                 self.cfg.asset.self_collisions,
                 0,
             )
+            self.gym.enable_actor_dof_force_sensors(env_handle, actor_handle)   # 开启关节力矩传感器
             dof_props = self._process_dof_props(dof_props_asset, i) # 处理关节属性(可能添加随机化)
             self.gym.set_actor_dof_properties(env_handle, actor_handle, dof_props) # 设置演员自由度属性
             body_props = self.gym.get_actor_rigid_body_properties(env_handle, actor_handle)# 添加刚体属性(可能添加随机化)

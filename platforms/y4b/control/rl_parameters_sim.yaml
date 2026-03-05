@@ -40,8 +40,9 @@ clip_actions: 100.0
 default_pos: [-0.523599, 0, 0.833691, 0.0, -0.523599, 0, 0.833691, 0.0]
 
 #速度与角速度补偿
-lin_vel_com: -0.0
-omega_com: 0.0
+lin_vel_x_com: -0.0
+lin_vel_y_com: -0.0
+omega_com: -0.0
 
 model:
   estimator: "estimator.pt"

@@ -59,7 +59,8 @@ void RobotModel::Initialize() {
 
   S.block(0, 6, pino_model_.nv - 6, pino_model_.nv - 6) = Eigen::MatrixXd::Identity(pino_model_.nv - 6, pino_model_.nv - 6);
   S_transpose_pinv = (S * S.transpose()).inverse() * S;
-  vel_des_ = 0;
+  vel_x_des_ = 0;
+  vel_y_des_ = 0;
   omega_des_ = 0;
   phase_ = 0;
   gait_enable_ = false;
@@ -272,6 +273,12 @@ void RobotModel::UpdateKinematic() {
   pinocchio::computeJointJacobians(pino_model_, pino_data_, q_pino);
   pinocchio::computeJointJacobiansTimeVariation(pino_model_, pino_data_, q_pino, qdot);
   pinocchio::centerOfMass(pino_model_, pino_data_, q_pino);
+
+
+  // int joint_id = pino_model_.getJointId("right_wheel_joint");
+  // Eigen::Vector3d pos = pino_data_.oMi[joint_id].translation();
+  // std::cout << "pos is: " << pos << std::endl;
+
 
   // fixed model
   pinocchio::forwardKinematics(pino_model_fixed_, pino_data_fixed_, q_fixed);

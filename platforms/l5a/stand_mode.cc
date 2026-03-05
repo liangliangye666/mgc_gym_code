@@ -19,14 +19,15 @@ double call_time_ms = 0.0;  // Initialize time_ms to 0.0
 auto last_time = std::chrono::high_resolution_clock::now();
 //控制信号声明及初始化,期望速度/角速度/运行强化学习算法
 struct CtlSigs {
-  double vel_des;
+  double vel_x_des;
+  double vel_y_des;
   double omega_des;
   bool rl_run;          //运行强化学习算法
   bool gait_enable;     //步态使能
   double gait_phase;    //步态相位
   double gait_counter;  //步态相位计数器
 }; 
-CtlSigs ctlSigs{0.0, 0.0, false, false, 0.0, 0.0};
+CtlSigs ctlSigs{0.0, 0.0, 0.0, false, false, 0.0, 0.0};
 //手柄信号处理,速度信号平滑,观测值处理函数声明
 void handleSigs_processing(standmode_output_t* standmode_output, const standmode_input_t* standmode_input, CtlSigs* ctlSigs, l5a::FSM* fsm);
 float updateWithSmartBrake(float current, float target, float a_up, float a_down, float dt);
@@ -44,12 +45,12 @@ void standMode_initialize(standmode_output_t* standmode_output, standmode_input_
 //设置电机参数
 void setMotorParameters(standmode_output_t* standmode_output, standmode_input_t* standmode_input) {
   // 全部电机使能
-  standmode_output->joints_cmd.joint_h_pitch_l.enable = 1;
   standmode_output->joints_cmd.joint_h_roll_l.enable = 1;
+  standmode_output->joints_cmd.joint_h_pitch_l.enable = 1;
   standmode_output->joints_cmd.joint_k_pitch_l.enable = 1;
   standmode_output->joints_cmd.joint_w_pitch_l.enable = 1;
-  standmode_output->joints_cmd.joint_h_pitch_r.enable = 1;
   standmode_output->joints_cmd.joint_h_roll_r.enable = 1;
+  standmode_output->joints_cmd.joint_h_pitch_r.enable = 1;
   standmode_output->joints_cmd.joint_k_pitch_r.enable = 1;
   standmode_output->joints_cmd.joint_w_pitch_r.enable = 1;
 
@@ -63,12 +64,12 @@ void setMotorParameters(standmode_output_t* standmode_output, standmode_input_t*
   // standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 4;
   // standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 4;
   //轮子力矩模式,其他关节电机力位混合模式
-  standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 11;
   standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 11;
+  standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 11;
   standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 11;
   standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 4;
-  standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 11;
   standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 11;
+  standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 11;
   standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 11;
   standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 4;
 }
@@ -84,8 +85,9 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
   robot_model.UpdateRealJointStates(standmode_output, standmode_input);                                                 //更新反馈关节状态
   robot_model.UpdateModel();                                                                                            //更新模型
   handleSigs_processing(standmode_output, standmode_input, &ctlSigs, &fsm);                                             //处理手柄信号
-  robot_model.vel_des_ = updateWithSmartBrake(robot_model.vel_des_, ctlSigs.vel_des, 0.5, 1.5, robot_model.control_dt); //获取期望速度与角速度
-  // robot_model.vel_des_ = ctlSigs.vel_des;
+  robot_model.vel_x_des_ = updateWithSmartBrake(robot_model.vel_x_des_, ctlSigs.vel_x_des, 0.5, 1.5, robot_model.control_dt); //获取期望速度与角速度
+robot_model.vel_y_des_ = ctlSigs.vel_y_des;
+  // robot_model.vel_x_des_ = ctlSigs.vel_x_des;
   robot_model.omega_des_ = ctlSigs.omega_des;
   robot_model.gait_enable_ = ctlSigs.gait_enable;
   robot_model.phase_ = ctlSigs.gait_phase;
@@ -108,41 +110,41 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
   robot_model.observed_value[5] = tau_cmd[4];
   robot_model.observed_value[6] = tau_cmd[5];
 
-  standmode_output->joints_cmd.joint_h_pitch_l.KP = pos_fb_kp[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_h_roll_l.KP = pos_fb_kp[static_cast<int>(l5a::Joints::left_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_pitch_l.KP = pos_fb_kp[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_k_pitch_l.KP = pos_fb_kp[static_cast<int>(l5a::Joints::left_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_l.KP = 0;
-  standmode_output->joints_cmd.joint_h_pitch_r.KP = pos_fb_kp[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_h_roll_r.KP = pos_fb_kp[static_cast<int>(l5a::Joints::right_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_pitch_r.KP = pos_fb_kp[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_k_pitch_r.KP = pos_fb_kp[static_cast<int>(l5a::Joints::right_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_r.KP = 0;
 
-  standmode_output->joints_cmd.joint_h_pitch_l.KD = pos_fb_kd[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_h_roll_l.KD = pos_fb_kd[static_cast<int>(l5a::Joints::left_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_pitch_l.KD = pos_fb_kd[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_k_pitch_l.KD = pos_fb_kd[static_cast<int>(l5a::Joints::left_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_l.KD = 0;
-  standmode_output->joints_cmd.joint_h_pitch_r.KD = pos_fb_kd[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_h_roll_r.KD = pos_fb_kd[static_cast<int>(l5a::Joints::right_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_pitch_r.KD = pos_fb_kd[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_k_pitch_r.KD = pos_fb_kd[static_cast<int>(l5a::Joints::right_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_r.KD = 0;
 
-  standmode_output->joints_cmd.joint_h_pitch_l.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_h_roll_l.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::left_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_pitch_l.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_k_pitch_l.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::left_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_l.vel_cmd = 0;
-  standmode_output->joints_cmd.joint_h_pitch_r.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_h_roll_r.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::right_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_pitch_r.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_k_pitch_r.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::right_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_r.vel_cmd = 0;
 
   // torque
-  standmode_output->joints_cmd.joint_h_pitch_l.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_h_roll_l.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::left_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_pitch_l.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_k_pitch_l.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::left_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_l.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::left_wheel_joint)];
 
-  standmode_output->joints_cmd.joint_h_pitch_r.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_h_roll_r.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::right_hip_roll_joint)];
+  standmode_output->joints_cmd.joint_h_pitch_r.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_k_pitch_r.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::right_knee_joint)];
   standmode_output->joints_cmd.joint_w_pitch_r.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::right_wheel_joint)];
 
@@ -202,16 +204,22 @@ void handleSigs_processing(standmode_output_t* standmode_output, const standmode
     handle_RB = 0;
   }
 
-  if (std::abs(standmode_input->Handle_signals.a1 - 0.5) <= 0.1 || handle_LB) {
-    ctlSigs->vel_des = 0.0;
+if (std::abs(standmode_input->Handle_signals.a1 - 0.5) <= 0.1 || handle_LB) {
+    ctlSigs->vel_x_des = 0.0;
   } else {
-    ctlSigs->vel_des = (standmode_input->Handle_signals.a1 - 0.5) * (-1.0) * handle_LT * 0.5;
+    ctlSigs->vel_x_des = (standmode_input->Handle_signals.a1 - 0.5) * (-1.0) * handle_LT;
+  }
+
+  if (std::abs(standmode_input->Handle_signals.a0 - 0.5) <= 0.1 || handle_LB) {
+    ctlSigs->vel_y_des = 0.0;
+  } else {
+    ctlSigs->vel_y_des = (standmode_input->Handle_signals.a0 - 0.5) * (-1.0) * handle_LT;
   }
 
   if (std::abs(standmode_input->Handle_signals.a3 - 0.5) <= 0.1 || handle_RB) {
     ctlSigs->omega_des = 0.0;
   } else {
-    ctlSigs->omega_des = (standmode_input->Handle_signals.a3 - 0.5) * (-1.0) * handle_LT * 0.5;
+    ctlSigs->omega_des = (standmode_input->Handle_signals.a3 - 0.5) * (-1.0) * handle_LT;
   }
 
   if (handle_RT) {

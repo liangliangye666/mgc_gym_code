@@ -117,6 +117,7 @@ class Y4B_2WHEEL(LeggedRobot):
                 self.gym.fetch_results(self.sim, True)
             # 更新自由度状态张量
             self.gym.refresh_dof_state_tensor(self.sim) # 更新自由度状态张量
+            self.gym.refresh_dof_force_tensor(self.sim) # 刷新关节力矩张量
             # 计算自由度速度
             self.compute_dof_vel()
 
@@ -775,7 +776,7 @@ class Y4B_2WHEEL(LeggedRobot):
                     self.dof_acc * self.obs_scales.dof_acc,  # 8,关节加速度,速度差分来的
                     # (self.dof_pos - self.default_dof_pos) * self.obs_scales.dof_pos,  # 8
                     heights,  # 7*11,地形信息
-                    self.torques * self.obs_scales.torque,  # 8,力矩信息
+                    self.dof_torques * self.obs_scales.torque,  # 8,力矩信息
                     (self.base_mass - self.raw_base_mass).view(self.num_envs, 1),  # 1,base质量
                     self.base_com,  # 3,base质心
                     # self.default_dof_pos - self.raw_default_dof_pos,  # 8
@@ -859,19 +860,22 @@ class Y4B_2WHEEL(LeggedRobot):
     def _init_buffers(self):
         """Initialize torch tensors which will contain simulation states and processed quantities"""
         # get gym GPU state tensors
-        actor_root_state = self.gym.acquire_actor_root_state_tensor(self.sim) # 演员(机器人)的根状态(位置/旋转/速度),存储了13个值:[x,y,z,qx,qy,qz,qw,vx,vy,vz,wx,wy,wz]
-        dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim) # 所有关节(自由度)的状态(位置和速度),对于每个关节,存储了2个值:[position,velocity]
-        net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim) # 所有刚体的净接触力,存储每个刚体的三维接触力:[Fx,Fy,Fz]
-        rigid_body_tensor = self.gym.acquire_rigid_body_state_tensor(self.sim) # 所有刚体在世界坐标系中的位置,维度:[num_envs * num_bodies, 13]
+        actor_root_state = self.gym.acquire_actor_root_state_tensor(self.sim)       # 演员(机器人)的根状态(位置/旋转/速度),存储了13个值:[x,y,z,qx,qy,qz,qw,vx,vy,vz,wx,wy,wz]
+        dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)              # 所有关节(自由度)的状态(位置和速度),对于每个关节,存储了2个值:[position,velocity]
+        dof_force_tensor = self.gym.acquire_dof_force_tensor(self.sim)              # 所有关节的力矩信息,[torque]
+        net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim)    # 所有刚体的净接触力,存储每个刚体的三维接触力:[Fx,Fy,Fz]
+        rigid_body_tensor = self.gym.acquire_rigid_body_state_tensor(self.sim)      # 所有刚体在世界坐标系中的位置,维度:[num_envs * num_bodies, 13]
 
         self.gym.refresh_dof_state_tensor(self.sim) # 刷新自由度状态张量,确保数据最新,以上四个是指向对应物理量的指针,刷新数据后保证指针指向的是最新的数据
+        self.gym.refresh_dof_force_tensor(self.sim) # 刷新关节力矩张量
         self.gym.refresh_actor_root_state_tensor(self.sim) # 刷新演员根状态张量
         self.gym.refresh_net_contact_force_tensor(self.sim) # 刷新刚体净接触力张量
         self.gym.refresh_rigid_body_state_tensor(self.sim) # 刷新刚体状态张量
 
         # create some wrapper tensors for different slices
-        self.root_states = gymtorch.wrap_tensor(actor_root_state) # 机器人根状态张量转换为PyTorch张量,actor_root_state是指向GPU数据的原始指针,wrap_tensor是将指针指向数据包装成PyTorch张量
-        self.dof_state = gymtorch.wrap_tensor(dof_state_tensor) # 机器人自由度状态张量转换为PyTorch张量
+        self.root_states = gymtorch.wrap_tensor(actor_root_state)       # 机器人根状态张量转换为PyTorch张量,actor_root_state是指向GPU数据的原始指针,wrap_tensor是将指针指向数据包装成PyTorch张量
+        self.dof_state = gymtorch.wrap_tensor(dof_state_tensor)         # 机器人自由度状态张量转换为PyTorch张量
+        self.dof_torques = gymtorch.wrap_tensor(dof_force_tensor).view(self.num_envs, self.num_dof)     # 关节力矩反馈信息,维度[num_envs,num_dof]
         self.dof_pos = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 0] # 关节位置,维度(num_envs,num_dof),view是引用,因此关节位置和速度会自动刷新,将张量按照期望维度排列,[...,0]是提取该维度信息
         self.dof_vel = self.dof_state.view(self.num_envs, self.num_dof, 2)[..., 1] # 关节速度,维度(num_envs,num_dof),提取后维度减1
         self.dof_acc = torch.zeros_like(self.dof_vel) # 初始化自由度加速度为0
@@ -1334,6 +1338,7 @@ class Y4B_2WHEEL(LeggedRobot):
                 self.cfg.asset.self_collisions,
                 0,
             )
+            self.gym.enable_actor_dof_force_sensors(env_handle, actor_handle)   # 开启关节力矩传感器
             # 处理自由度属性
             dof_props = self._process_dof_props(dof_props_asset, i)
             # 设置演员的自由度属性
@@ -1576,29 +1581,76 @@ class Y4B_2WHEEL(LeggedRobot):
         rew_enter = enter_gait.float()
         return rew_enter
     
-    def _reward_contact(self): 
-        gait_enable  = self.stage_buf[:, 1]                             # 只在 gait
-        fz = self.contact_forces[:, self.feet_indices, 2]               # 接触力z,维度[N, 2]
-        is_stance = (self.leg_phase < 0.55).float()                     # 支撑脚和摆动脚,维度[N, 2]
-        stance_rew = is_stance * torch.clamp(fz / 50.0, 0, 1)           # 支撑脚力越大越好
-        swing_rew  = (1 - is_stance) * torch.exp(-fz / 5.0)             # 摆动脚力越小越好
-        rew_gait = torch.sum(stance_rew + swing_rew, dim=1)             # 步态奖励
-        # print("message:", torch.cat([gait_enable[0].unsqueeze(0),self.phase[0].unsqueeze(0), is_stance[0]], dim=0))
-        return rew_gait * gait_enable
+    # def _reward_contact(self): 
+    #     gait_enable  = self.stage_buf[:, 1]                             # 只在 gait
+    #     fz = self.contact_forces[:, self.feet_indices, 2]               # 接触力z,维度[N, 2]
+    #     is_stance = (self.leg_phase < 0.55).float()                     # 支撑脚和摆动脚,维度[N, 2]
+    #     stance_rew = is_stance * torch.clamp(fz / 50.0, 0, 1)           # 支撑脚力越大越好
+    #     swing_rew  = (1 - is_stance) * torch.exp(-fz / 5.0)             # 摆动脚力越小越好
+    #     rew_gait = torch.sum(stance_rew + swing_rew, dim=1)             # 步态奖励
+    #     # print("message:", torch.cat([gait_enable[0].unsqueeze(0),self.phase[0].unsqueeze(0), is_stance[0]], dim=0))
+    #     return rew_gait * gait_enable
 
+    # def _reward_feet_swing_height(self):
+    #     gait_enable  = self.stage_buf[:, 1]                             # 只在 gait
+    #     z = self.wheel_pos[:, :, 2]                                     # 抬脚高度
+    #     fz = self.contact_forces[:, self.feet_indices, 2]               # 接触力z,维度[N, 2]
+    #     swing = (fz < 1.0).float()                                      # 摆动脚
+    #     z_min = self.cfg.asset.wheel_radius                             # 轮子半径
+    #     z_target = self.cfg.commands.gait_foot_height                   # 步态抬脚高度
+    #     delta_z = z_target - z_min
+    #     rew_foot_up = torch.clamp(z - z_min, min=0.0, max=0.1)          # 抬脚先给奖励
+    #     height_err = torch.abs(z - z_target)                            # 高度偏差惩罚（平滑）
+    #     height_penalty = torch.clamp(height_err, max=delta_z)
+    #     rew = torch.sum((10 * rew_foot_up - 2 * height_penalty) * swing, dim=1)   # 只对摆动脚起作用
+    #     return rew * gait_enable
+
+    def _reward_contact(self): 
+        gait_enable  = self.stage_buf[:, 1]                                 # 只在 gait
+        fz = self.contact_forces[:, self.feet_indices, 2]                   # 接触力z,维度[N, 2]
+        contact = (fz > 1.0).float()                                        # 是否接触
+        is_stance = (self.leg_phase < 0.55).float()                         # 支撑脚和摆动脚,维度[N, 2]
+        rew_contact = is_stance * contact + (1 - is_stance) * (1 - contact) # 支撑腿接触,摆动腿不接触
+        rew_gait = torch.mean(rew_contact, dim=1)                            # 步态奖励
+        return rew_gait * gait_enable
+    
     def _reward_feet_swing_height(self):
         gait_enable  = self.stage_buf[:, 1]                             # 只在 gait
         z = self.wheel_pos[:, :, 2]                                     # 抬脚高度
-        fz = self.contact_forces[:, self.feet_indices, 2]               # 接触力z,维度[N, 2]
-        swing = (fz < 1.0).float()                                      # 摆动脚
+        phase = self.leg_phase
+        d = 0.55
+        swing = (phase >= d).float()                                    # 摆动脚
         z_min = self.cfg.asset.wheel_radius                             # 轮子半径
         z_target = self.cfg.commands.gait_foot_height                   # 步态抬脚高度
         delta_z = z_target - z_min
+        # 构造归一化摆动腿swing_phase变量
+        swing_phase = torch.relu((phase - d) / (1 - d))
+        swing_phase = torch.clamp(swing_phase, 0.0, 1.0)
+        # 光滑正弦轨迹
+        z_ref = z_min + delta_z * torch.sin(np.pi * swing_phase) ** 2
         rew_foot_up = torch.clamp(z - z_min, min=0.0, max=0.1)          # 抬脚先给奖励
-        height_err = torch.abs(z - z_target)                            # 高度偏差惩罚（平滑）
+        height_err = torch.abs(z - z_ref)                               # 高度偏差惩罚（平滑）
         height_penalty = torch.clamp(height_err, max=delta_z)
         rew = torch.sum((10 * rew_foot_up - 2 * height_penalty) * swing, dim=1)   # 只对摆动脚起作用
         return rew * gait_enable
+
+    # def _reward_feet_swing_height(self):
+    #     gait_enable  = self.stage_buf[:, 1]                             # 只在 gait
+    #     phase = self.leg_phase
+    #     d = 0.55
+    #     is_swing = (phase >= d).float()
+    #     z = self.wheel_pos[:, :, 2]                                     # 抬脚高度
+    #     z_min = self.cfg.asset.wheel_radius                             # 轮子半径
+    #     z_target = self.cfg.commands.gait_foot_height                   # 步态抬脚高度
+    #     delta_z = z_target - z_min
+    #     # 构造归一化摆动腿swing_phase变量
+    #     swing_phase = torch.relu((phase - d) / (1 - d))
+    #     swing_phase = torch.clamp(swing_phase, 0.0, 1.0)
+    #     # 光滑正弦轨迹
+    #     z_ref = z_min + delta_z * torch.sin(np.pi * swing_phase) ** 2
+    #     height_err = torch.abs(z - z_ref)                               # 高度偏差惩罚（平滑）
+    #     rew = torch.mean(torch.exp(-30 * height_err) * is_swing, dim=1)
+    #     return rew * gait_enable
     
     def _reward_contact_no_vel(self):
         # Penalize contact with no velocity

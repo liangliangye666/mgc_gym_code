@@ -115,10 +115,9 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             height = [0.641, 0.661]     # 高度范围上下浮动3cm
             heading = [-3.14, 3.14]     # 朝向范围
             mode_normalization = [0, 1] # 模式归一化,暂时两个模式-步态占比0.8,两轮平衡占比0.2
-        stage_names = ["stand", "gait", "recover"]
-        gait_train_proportion = 0.5     # 训练步态的环境占比
-        gait_foot_height = 0.18
-        gait_period = 0.6 
+        gait_train_proportion = 0.8     # 训练步态的环境占比
+        gait_foot_height = 0.277
+        gait_period = 1 
 
     class control(LeggedRobotCfg.control):
         # 位置动作的缩放系数
@@ -150,6 +149,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         terminate_after_contacts_on = ["base"] # 终止区域
         self_collisions = 1  # 1 to disable, 0 to enable...bitwise filter,控制机器人自身各部分之间是否能够发生碰撞检测
         flip_visual_attachments = False # 设置是否反转视觉附件
+        stage_names = ["stand", "gait", "recover"]
 
     class domain_rand(LeggedRobotCfg.domain_rand):
 
@@ -336,7 +336,7 @@ class L5A_2WHEEL_CfgPPO(LeggedRobotCfgPPO):
         policy_class_name = "ActorCriticSequence"  # could be ActorCritic, ActorCriticSequence,使用序列处理的actor-critic
         algorithm_class_name ="PPO" # 明确使用PPO算法
         num_steps_per_env = 48  # per iteration,每个环境每次迭代收集48步数据
-        max_iterations = 10000  # number of policy updates,最大迭代次数
+        max_iterations = 20000  # number of policy updates,最大迭代次数
 
         # logging
         experiment_name = "l5a_2wheel"

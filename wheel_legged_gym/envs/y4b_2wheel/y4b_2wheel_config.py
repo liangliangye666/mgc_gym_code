@@ -116,8 +116,8 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             heading = [-3.14, 3.14]     # 朝向范围
             mode_normalization = [0, 1] # 模式归一化,暂时两个模式-步态占比0.8,两轮平衡占比0.2
         gait_train_proportion = 0.8     # 训练步态的环境占比
-        gait_foot_height = 0.18
-        gait_period = 0.6 
+        gait_foot_height = 0.25
+        gait_period = 1.0 
 
     class control(LeggedRobotCfg.control):
         # 位置动作的缩放系数
@@ -240,7 +240,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             leg_end_x_diff = 1 # 两条腿不要叉开
             hip_pos = -2
             feet_distance = -2
-            contact = 10
+            contact = 100
             feet_swing_height = 100.0
             contact_no_vel = -5
             enter_gait = 10
@@ -337,7 +337,7 @@ class Y4B_2WHEEL_CfgPPO(LeggedRobotCfgPPO):
         policy_class_name = "ActorCriticSequence"  # could be ActorCritic, ActorCriticSequence,使用序列处理的actor-critic
         algorithm_class_name ="PPO" # 明确使用PPO算法
         num_steps_per_env = 48  # per iteration,每个环境每次迭代收集48步数据
-        max_iterations = 10000  # number of policy updates,最大迭代次数
+        max_iterations = 50000  # number of policy updates,最大迭代次数
 
         # logging
         experiment_name = "y4b_2wheel"
