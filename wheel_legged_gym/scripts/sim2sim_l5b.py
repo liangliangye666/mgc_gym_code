@@ -36,15 +36,15 @@ from tqdm import tqdm # 进度条可视化工具,适合监控长时间运行的�
 from collections import deque # 导入双端队列数据结构,高效存储历史状态数据,用于强化学习的经验回放机制
 from scipy.spatial.transform import Rotation as R # 导入SciPy旋转变换工具,处理3D旋转问题(四元数/欧拉角/旋转矩阵转换)
 from wheel_legged_gym import WHEEL_LEGGED_GYM_ROOT_DIR # 导入自定义路径常量
-from wheel_legged_gym.envs import Y4B_2WHEEL_Cfg # 导入机器人环境配置类作为父类
+from wheel_legged_gym.envs import L5B_2WHEEL_Cfg # 导入机器人环境配置类作为父类
 import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor-Critic架构),自动求导训练强化学习模型,GPU加速仿真数据处理(如状态特征提取)
 
 
 class cmd:
-    vel_x = -0.0 
+    vel_x = -0.0
     vel_y = 0.0
     vel_yaw = 0.0
-    height = 0.67
+    height = 0.651
     heading = 0
 
 
@@ -182,20 +182,16 @@ def run_mujoco(policy, cfg):
     action = np.zeros((cfg.env.num_actions), dtype=np.double)
 
     count_lowlevel = 0
-    count_gait = 0
 
 
     for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
+        phase = (count_lowlevel * 0.01) % 0.6 / 0.6
         if count_lowlevel < 1000:
-            count_gait = 0
             gait_enable = 0
         elif count_lowlevel < 3000:
-            count_gait += 1
             gait_enable = 1
         else:
-            count_gait = 0
             gait_enable = 0
-        phase = (count_gait * 0.01) % cfg.commands.gait_period / cfg.commands.gait_period
         # Obtain an observation
         q, dq, quat, v, omega, gvec = get_obs(data) # 获取17+16+4+3+3+3=46维的观测量
 
@@ -231,13 +227,13 @@ def run_mujoco(policy, cfg):
         obs[0, 14:17] = q[4:7] * cfg.normalization.obs_scales.dof_pos
         obs[0, 17:25] = dq * cfg.normalization.obs_scales.dof_vel
         obs[0, 25:33] = action
-        obs[0, 33] = gait_enable
-        obs[0, 34] = np.sin(2 * np.pi * phase) * gait_enable
-        obs[0, 35] = np.cos(2 * np.pi * phase) * gait_enable
+        # obs[0, 33] = gait_enable
+        # obs[0, 34] = np.sin(2 * np.pi * phase) * gait_enable
+        # obs[0, 35] = np.cos(2 * np.pi * phase) * gait_enable
 
-        obs[0,36]=v[0]
-        obs[0,37]=v[1]
-        obs[0,38]=v[2]
+        obs[0,33]=v[0]
+        obs[0,34]=v[1]
+        obs[0,35]=v[2]
         # obs[0,34:37]=base_euler_zyx
 
         obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
@@ -280,13 +276,13 @@ if __name__ == "__main__":
     parser.add_argument("--terrain", action="store_true", help="terrain or plane") # 如果命令行中包含此参数,则值为True,否则为False,帮助信息说明地形
     args = parser.parse_args() # 解析命令行传入的参数,并将结果存储在args对象中
 
-    class Sim2simCfg(Y4B_2WHEEL_Cfg): # 定义仿真配置类,继承自基础配置
+    class Sim2simCfg(L5B_2WHEEL_Cfg): # 定义仿真配置类,继承自基础配置
 
         class sim_config:
             if args.terrain:
                 mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l2c/mjcf/y1a-terrain.xml"
             else:
-                mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/y4b/xml/y4burdf20260114.xml"
+                mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/xml/l5aurdf20260209.xml"
             sim_duration = 200.0 # 单次仿真持续时间为10s
             dt = 0.005 # 仿真步长为0.005s
             decimation = 2 # 设置控制频率与仿真频率的比值为10,即每隔10步执行一次控制策略

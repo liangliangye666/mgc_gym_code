@@ -46,6 +46,9 @@ class LeggedRobotCfg(BaseConfig):
         episode_length_s = 20  # episode length in seconds
         dof_vel_use_pos_diff = True
         fail_to_terminal_time_s = 1
+        next_goal_threshold = 0.2
+        reach_goal_delay = 0.1
+        num_future_goal_obs = 2
 
     class terrain:
         mesh_type = "trimesh"  # "heightfield" # none, plane, heightfield or trimesh
@@ -83,6 +86,10 @@ class LeggedRobotCfg(BaseConfig):
         terrain_proportions = [0.2, 0.2, 0.2, 0.1, 0.2, 0.1]
         # trimesh only:
         slope_treshold = 0.75  # slopes above this threshold will be corrected to vertical surfaces
+        num_goals = 6
+
+    class depth:
+        use_camera = False
 
     class commands:
         curriculum = True

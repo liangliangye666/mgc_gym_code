@@ -30,9 +30,38 @@
   <worldbody>
     <light pos="5 0 30" />
     <geom name="plane" type="plane" size="20 20 .01" material="grid" friction="1.0 0.02 0.01"/>
-    <geom name="up_slope" type="box" size="1 0.2 0.02" pos="5.96 0.2 0" euler="0 0.1745 0" rgba="0.5 0.4 0.3 1"/>
+    <!-- <geom name="up_slope" type="box" size="1 0.2 0.02" pos="5.96 0.2 0" euler="0 0.1745 0" rgba="0.5 0.4 0.3 1"/>
     <geom name="flat" type="box" size="1 0.2 0.02" pos="3.98 0.2 0.173" euler="0 0 0" rgba="0.5 0.4 0.3 1"/>
-    <geom name="down_slope" type="box" size="1 0.2 0.02" pos="2 0.2 0" euler="0 -0.1745 0" rgba="0.5 0.4 0.3 1"/>
+    <geom name="down_slope" type="box" size="1 0.2 0.02" pos="2 0.2 0" euler="0 -0.1745 0" rgba="0.5 0.4 0.3 1"/> -->
+        <!-- Step 1 -->
+    <geom name="step1" type="box"
+          size="0.2 1.0 0.05"
+          pos="2.0 0.2 0.05"
+          rgba="0.5 0.4 0.3 1"/>
+
+    <!-- Step 2 -->
+    <geom name="step2" type="box"
+          size="0.2 1.0 0.05"
+          pos="2.2 0.2 0.10"
+          rgba="0.5 0.4 0.3 1"/>
+
+    <!-- Step 3 -->
+    <geom name="step3" type="box"
+          size="0.2 1.0 0.05"
+          pos="2.4 0.2 0.15"
+          rgba="0.5 0.4 0.3 1"/>
+
+    <!-- Step 4 -->
+    <geom name="step4" type="box"
+          size="0.2 1.0 0.05"
+          pos="2.6 0.2 0.20"
+          rgba="0.5 0.4 0.3 1"/>
+
+    <!-- Step 5 -->
+    <geom name="step5" type="box"
+          size="0.2 1.0 0.05"
+          pos="2.8 0.2 0.25"
+          rgba="0.5 0.4 0.3 1"/>
 
     <body name="base_link">
       <inertial pos="-0.001149 0.000468 0.011577" quat="0.967592 -0.0151463 -0.252049 -0.00264839" mass="8.8261" diaginertia="0.124436 0.0975938 0.0752338"/>

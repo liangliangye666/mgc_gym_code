@@ -1,3 +1,3 @@
 if(PHYSICS_ENABLE)
-    install(FILES run_y4b.sh DESTINATION scripts)
+    install(FILES run_l5a.sh DESTINATION scripts)
 endif()

@@ -34,12 +34,12 @@ from wheel_legged_gym.envs.base.legged_robot_config import (
 )
 
 
-class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
+class L5B_2WHEEL_Cfg(LeggedRobotCfg):
     class env(LeggedRobotCfg.env):
         num_envs = 4096  # 4096,设置并行训练的环境数量,在仿真中会同时运行此数量的独立实例
         num_actions = 8 # 每个环境中机器人的动作空间维度,通常对应于机器人的关节数量
-        num_observations = 3 + 4 + 4 + 3 + 3 + num_actions*2 + 3  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
-        num_privileged_obs = 3 + 3 + num_observations + 3 + num_actions*4 + 7 * 11 + 3 + 1 * 3 + 6 + 3# 特权观测,评论家网络输入
+        num_observations = 3 + 4 + 4 + 3 + 3 + num_actions*2 + 2 # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
+        num_privileged_obs = 3 + 3 + num_observations + 3 + num_actions*4 + 7 * 11 + 3 + 1 * 3 + 6 + 15# 特权观测,评论家网络输入
         obs_history_length = 5  # number of observations stacked together,状态观测历史堆叠的长度
         obs_history_dec = 1 # 状态历史堆叠的衰减参数,当前时刻权重最高,这里设置为1说明没有衰减
         env_spacing = 3.0  # not used with heightfields/trimeshes,环境中示例之间的间隔为3.0米
@@ -47,9 +47,10 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         episode_length_s = 20  # episode length in seconds,每个回合的最大时长为20s,超过这个时间,回合会被终止
         dof_vel_use_pos_diff = True # True:关节速度通过位置差分来计算,False:直接使用仿真器提供的关节速度
         fail_to_terminal_time_s = 1 # 机器人失败(如摔倒)到环境终止的时间为0.5s,避免过早终止导致学习不稳定
+        reach_goal_delay = 0.05
 
     class terrain(LeggedRobotCfg.terrain):
-        mesh_type = "plane" # 地形网格类型:"plane-平坦地形","trimesh-三角形网格","heightfield-高度场"
+        mesh_type = "trimesh" # 地形网格类型:"plane-平坦地形","trimesh-三角形网格","heightfield-高度场"
         horizontal_scale = 0.1  # [m],水平缩放比例,表示每个网格单元代表10cm x 10cm
         vertical_scale = 0.005  # [m],垂直缩放比例,高度图中每个单位值的实际高度
         border_size = 25  # [m],边界大小,地形周围的边界区域大小,防止机器人移动到地形边缘外
@@ -79,24 +80,25 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         terrain_length = 8.0 # 地形片段的长度(m)
         terrain_width = 8.0 # 地形片段的宽度(m)
         num_rows = 10  # number of terrain rows (levels),地形网格的行数(难度级别)
-        num_cols = 20  # number of terrain cols (types),地形网格的列数(类型)
+        num_cols = 10  # number of terrain cols (types),地形网格的列数(类型)
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
-        terrain_proportions = [0.2, 0.2, 0.2, 0.1, 0.2, 0.1] # 地形类型比例分布
+        terrain_proportions = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0] # 地形类型比例分布
+        # terrain_proportions = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0] # 地形类型比例分布
         # trimesh only:
         slope_treshold = 0.75  # slopes above this threshold will be corrected to vertical surfaces,坡度阈值,当坡度超过此阈值时,地形会被修正为垂直表面
-
+        num_goals = 1
     class init_state(LeggedRobotCfg.init_state):
 
-        pos = [0.0, 0.0, 0.667]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
+        pos = [0.0, 0.0, 0.651]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
         rot = [0.0, 0.0, 0.0, 1.0]  # x,y,z,w [quat],base初始姿态
         default_joint_angles = {  # target angles when action = 0.0,各关节初始角度
-            "left_hip_pitch_joint": -0.523599,
             "left_hip_roll_joint": 0.0,
-            "left_knee_joint": 0.833691,
-            "left_wheel_joint": 0.0, 
-            "right_hip_pitch_joint": -0.523599, 
-            "right_hip_roll_joint": 0.0,  
-            "right_knee_joint": 0.833691,  
+            "left_hip_pitch_joint": 0.261799,
+            "left_knee_joint": -0.508606,
+            "left_wheel_joint": 0.0,
+            "right_hip_roll_joint": 0.0, 
+            "right_hip_pitch_joint": 0.261799,   
+            "right_knee_joint": -0.508606,  
             "right_wheel_joint": 0.0,
         }
 
@@ -109,15 +111,17 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         heading_command = False  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
         num_commands = 6 # 命令的数量
         class ranges: # 定义了每个命令可以取值的范围
-            lin_vel_x = [-0.5, 0.5]     # min max [m/s],线速度命令范围
-            lin_vel_y = [-0.5, 0.5]
+            lin_vel_x = [-0, 1]     # min max [m/s],线速度命令范围
+            lin_vel_y = [-0, 0]
             ang_vel_yaw = [-0.5, 0.5]   # 角速度命令范围
-            height = [0.657, 0.687]     # 高度范围上下浮动3cm
+            height = [0.646, 0.656]     # 高度范围上下浮动3cm
             heading = [-3.14, 3.14]     # 朝向范围
             mode_normalization = [0, 1] # 模式归一化,暂时两个模式-步态占比0.8,两轮平衡占比0.2
+        gait_command = False            # 是否开启步态训练
         gait_train_proportion = 0.8     # 训练步态的环境占比
-        gait_foot_height = 0.15
-        gait_period = 0.6
+        gait_foot_height = 0.277
+        gait_period = 1 
+        stair_command = False
 
     class control(LeggedRobotCfg.control):
         # 位置动作的缩放系数
@@ -127,24 +131,24 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
 
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip_pitch": 20.0, "hip_roll": 20.0, "knee": 30.0, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip_roll": 20.0, "hip_pitch": 20.0, "knee": 30.0, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip_pitch": 2, "hip_roll": 2, "knee": 3, "wheel": 2.0}  # [N*m*s/rad]
+        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 3, "wheel": 2.0}  # [N*m*s/rad]
 
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 2
 
     class asset(LeggedRobotCfg.asset):
-        file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/y4b/urdf/y4burdf20260114.urdf" # 机器人urdf路径
-        name = "y4b" # 机器人名称
+        file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/urdf/l5aurdf20260209.urdf" # 机器人urdf路径
+        name = "l5a" # 机器人名称
         foot_name = "wheel" # 足部名称
         joint_indices = [0, 1, 2, 4, 5, 6] # 关节索引
         wheel_indices = [3, 7] # 轮子索引
         base_link_indices = [0]
         joint_link_indices = [1, 2, 3, 5, 6, 7]
         wheel_link_indices = [4, 8]
-        wheel_radius = 0.1
-        track_width = 0.166*2
+        wheel_radius = 0.127
+        track_width = 0.1185*2
         penalize_contacts_on = ["right_hip", "right_knee", "base", "left_hip", "left_knee"] # 惩罚区域
         terminate_after_contacts_on = ["base"] # 终止区域
         self_collisions = 1  # 1 to disable, 0 to enable...bitwise filter,控制机器人自身各部分之间是否能够发生碰撞检测
@@ -227,48 +231,58 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
 
             # 速度跟踪
+            tracking_goal = 5
+            # position = 10
             tracking_lin_vel_x = 1
             # tracking_lin_vel_enhance = 1
-            tracking_lin_vel_y = 5
-            tracking_ang_vel = 1
+            # tracking_lin_vel_y = 1
+            # tracking_ang_vel = 1
+            # goal_progress = 10
+            heading = 2
+            # speed_penalty = -1
+            # goal_reached = 1
 
             # 姿态控制
-            base_height = 1 # 基座高度
-            lin_vel_z = -2.0 # 惩罚z轴速度
+            base_height = -3 # 基座高度
+            lin_vel_z = -0.3 # 惩罚z轴速度
             orientation = 1 # 基座重力投影方向
             # base_euler = 1
-            leg_end_x_diff = 1 # 两条腿不要叉开
-            hip_pos = -0.2
-            feet_distance = -0.5
-            contact = 1
-            feet_swing_height = 5.0
-            contact_no_vel = -5
-            enter_gait = 1
-            gait_no_wheel_vel = 1
-            # gait_no_wheel_torque =100
-
-            # 轮与地面接触
-            # wheel_contact_force = 1 # 1 #-1e-3 # 两前轮与地面接触,两后轮与地面分离
-            # back_wheel_contact = -0.1 #-0.1 # 两后轮与地面分离
-            # wheel_contact_force_equal = 0.01 # 两腿地面反力相同
-
+            leg_end_x_diff = -2 #-2 # 两条腿不要叉开
+            hip_pos = -2
+            feet_distance = -10
+            contact = 20
+            # feet_swing_height = 100.0
+            # contact_no_vel = -5
+            # enter_gait = 10
+            # gait_no_wheel_vel = 10
+            feet_clearance = 20
+            feet_air_time = 20
+            swing_no_wheel_vel = 0.5
+            feet_contact_forces = -5
+            
             # 机器人姿态柔顺性
             ang_vel_xy = -0.05
 
             # 机器人关节柔顺性
-            # dof_vel = -0.05         #-0.05
+            dof_vel = -1e-5         #-0.05
             dof_acc = -2.5e-7
-            torques = -2e-7 #-0.0001
-            action_rate = -0.005
-            action_smooth = -0.005
+            torques = -1e-5 #-0.0001
+            action_rate = -0.01 #-0.05
+            action_smooth = -0.05 #-0.05
+            energy = -0.001
 
             # 机器人关节限制
-            dof_pos_limits = -1.0
+            dof_pos_limits = -2.0
             # dof_vel_limits = -0.001
             # torque_limits = -0.001
-            
+            # wheel_slip = -10
+            wheel_spin = -50
+            # stuck = -2
             # 碰撞惩罚
-            collision = -1.0
+            collision = -50.0
+            # alive = 1
+            stumble = -100
+            # successful_lift = 100
 
         # 是否只保留正奖励（true 时负的总奖励修剪为 0，防止训练中提早终止的问题）
         only_positive_rewards = False
@@ -290,9 +304,20 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
         # 扭矩的软限制（超过此扭矩限制将受到惩罚）
         soft_torque_limit = 0.9
 
+        # 足端腾空时间奖励
+        max_air_time = 0.6  # 最大腾空时间（防止抬腿过高）
+        min_air_time = 0.2  # 最小腾空时间
+        
+        # 足端离地间隙奖励
+        target_feet_height = 0.05  # 跨越障碍的目标高度
+        feet_height_sigma = 0.02  # 高度误差方差
+        # 轮子卡住检测冷却时间
+        cooldown_time = 0.5
         # 接触力
         min_wheel_contact_force = 20.0
-        min_feet_distance = 0.332
+        max_wheel_contact_force = 300.0
+        min_feet_distance = 0.20
+        max_feet_distance = 0.40
     class sim(LeggedRobotCfg.sim):
         dt = 0.005  # 模拟时间步长 [秒]
         substeps = 1  # 每个时间步的子步数
@@ -313,7 +338,7 @@ class Y4B_2WHEEL_Cfg(LeggedRobotCfg):
             contact_collection = 2  # 碰撞数据收集模式：0 表示不收集，1 表示收集最后一个子步的数据，2 表示收集所有子步的数据（默认值为 2）
 
 
-class Y4B_2WHEEL_CfgPPO(LeggedRobotCfgPPO):
+class L5B_2WHEEL_CfgPPO(LeggedRobotCfgPPO):
     # PPO算法配置
     seed = 1  # 随机种子,确保实验可重复性,相同的种子会产生相同的随机行为
     runner_class_name = "OnPolicyRunner"  # 运行器类名,每次迭代都使用最新生成的数据进行训练
@@ -325,7 +350,7 @@ class Y4B_2WHEEL_CfgPPO(LeggedRobotCfgPPO):
         activation = "elu" # 激活函数,ELU比ReLU更平滑,缓解梯度消失问题
 
         # only for ActorCriticSequence
-        num_encoder_obs = Y4B_2WHEEL_Cfg.env.obs_history_length * Y4B_2WHEEL_Cfg.env.num_observations # 编码器输入维度=历史观测长度*单步观测维度
+        num_encoder_obs = L5B_2WHEEL_Cfg.env.obs_history_length * L5B_2WHEEL_Cfg.env.num_observations # 编码器输入维度=历史观测长度*单步观测维度
         latent_dim = 3  # at least 3 to estimate base linear velocity,基座速度空间
         encoder_hidden_dims = [256, 128, 64] # 编码器网络层数和数量
         # encoder_hidden_dims = [128, 64]
@@ -337,10 +362,10 @@ class Y4B_2WHEEL_CfgPPO(LeggedRobotCfgPPO):
         policy_class_name = "ActorCriticSequence"  # could be ActorCritic, ActorCriticSequence,使用序列处理的actor-critic
         algorithm_class_name ="PPO" # 明确使用PPO算法
         num_steps_per_env = 48  # per iteration,每个环境每次迭代收集48步数据
-        max_iterations = 30000  # number of policy updates,最大迭代次数
+        max_iterations = 100000  # number of policy updates,最大迭代次数
 
         # logging
-        experiment_name = "y4b_2wheel"
+        experiment_name = "l5b_2wheel"
         resume = False
         load_run = -1
         checkpoint = -1

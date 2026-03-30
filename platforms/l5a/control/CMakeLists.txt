@@ -50,7 +50,7 @@ target_include_directories(
     robot_model
     PUBLIC ${CMAKE_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../deploy
-    ${CMAKE_SOURCE_DIR}/platforms/l4a/control)
+    ${CMAKE_SOURCE_DIR}/platforms/l5a/control)
 target_include_directories(rl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
     ${TORCH_INCLUDE_DIRS})
 

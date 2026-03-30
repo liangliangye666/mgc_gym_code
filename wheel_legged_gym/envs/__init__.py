@@ -56,6 +56,12 @@ from .l5a_2wheel.l5a_2wheel_config import (
     L5A_2WHEEL_CfgPPO,
 )
 
+from .l5b_2wheel.l5b_2wheel import L5B_2WHEEL
+from .l5b_2wheel.l5b_2wheel_config import (
+    L5B_2WHEEL_Cfg,
+    L5B_2WHEEL_CfgPPO,
+)
+
 import os
 
 from wheel_legged_gym.utils.task_registry import task_registry
@@ -98,4 +104,11 @@ task_registry.register(
     L5A_2WHEEL,
     L5A_2WHEEL_Cfg(),
     L5A_2WHEEL_CfgPPO(),
+)
+
+task_registry.register(
+    "l5b_2wheel",
+    L5B_2WHEEL,
+    L5B_2WHEEL_Cfg(),
+    L5B_2WHEEL_CfgPPO(),
 )

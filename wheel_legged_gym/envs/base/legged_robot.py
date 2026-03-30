@@ -70,7 +70,7 @@ class LeggedRobot(BaseTask):
         self.cfg = cfg # 读取机器人训练环境配置参数
         self.sim_params = sim_params # 读取仿真参数设置
         self.height_samples = None # 高度采样
-        self.debug_viz = False # 调试可视化标志位
+        self.debug_viz = True # 调试可视化标志位
         self.init_done = False # 初始化完成标志位
         self._parse_cfg(self.cfg) # 解析机器人环境配置
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless) # 配置机器人仿真环境参数信息,包括asset的属性以及各个环境的实例化等
@@ -139,6 +139,60 @@ class LeggedRobot(BaseTask):
         # 更新上一时刻的关节位置
         self.last_dof_pos[:] = self.dof_pos[:]
 
+    def _update_goals(self):
+        next_flag = self.reach_goal_timer > self.cfg.env.reach_goal_delay / self.dt                                                     # 达到目标时长判断
+        self.cur_goal_idx[next_flag] += 1                                                                                               # 移动到下一个目标点
+        self.reach_goal_timer[next_flag] = 0                                                                                            # 重置到达目标计时器
+
+        self.reached_goal_ids = torch.norm(self.root_states[:, :2] - self.cur_goals[:, :2], dim=1) < self.cfg.env.next_goal_threshold   # 目标到达判断
+        self.reach_goal_timer[self.reached_goal_ids] += 1
+
+        self.target_pos_rel = self.cur_goals[:, :2] - self.root_states[:, :2]                                                           # 目标位置
+        self.next_target_pos_rel = self.next_goals[:, :2] - self.root_states[:, :2]                                                     # 下一目标位置
+
+        norm = torch.norm(self.target_pos_rel, dim=-1, keepdim=True)                                                                    # 当前目标向量
+        target_vec_norm = self.target_pos_rel / (norm + 1e-5)
+        self.target_yaw = torch.atan2(target_vec_norm[:, 1], target_vec_norm[:, 0])                                                     # 当前目标方向
+
+        norm = torch.norm(self.next_target_pos_rel, dim=-1, keepdim=True)                                                               # 下一目标向量
+        target_vec_norm = self.next_target_pos_rel / (norm + 1e-5)
+        self.next_target_yaw = torch.atan2(target_vec_norm[:, 1], target_vec_norm[:, 0])                                                # 下一目标方向
+
+    def _draw_goals(self):
+        sphere_geom = gymutil.WireframeSphereGeometry(0.1, 32, 32, None, color=(1, 0, 0))
+        sphere_geom_cur = gymutil.WireframeSphereGeometry(0.1, 32, 32, None, color=(0, 0, 1))
+        sphere_geom_reached = gymutil.WireframeSphereGeometry(self.cfg.env.next_goal_threshold, 32, 32, None, color=(0, 1, 0))
+        goals = self.terrain_goals[self.terrain_levels[self.lookat_id], self.terrain_types[self.lookat_id]].cpu().numpy()
+        for i, goal in enumerate(goals):
+            goal_xy = goal[:2] + self.terrain.cfg.border_size
+            pts = (goal_xy/self.terrain.cfg.horizontal_scale).astype(int)
+            goal_z = self.height_samples[pts[0], pts[1]].cpu().item() * self.terrain.cfg.vertical_scale
+            pose = gymapi.Transform(gymapi.Vec3(goal[0], goal[1], goal_z), r=None)
+            if i == self.cur_goal_idx[self.lookat_id].cpu().item():
+                gymutil.draw_lines(sphere_geom_cur, self.gym, self.viewer, self.envs[self.lookat_id], pose)
+                if self.reached_goal_ids[self.lookat_id]:
+                    gymutil.draw_lines(sphere_geom_reached, self.gym, self.viewer, self.envs[self.lookat_id], pose)
+            else:
+                gymutil.draw_lines(sphere_geom, self.gym, self.viewer, self.envs[self.lookat_id], pose)
+        
+        if not self.cfg.depth.use_camera:
+            sphere_geom_arrow = gymutil.WireframeSphereGeometry(0.02, 16, 16, None, color=(1, 0.35, 0.25))
+            pose_robot = self.root_states[self.lookat_id, :3].cpu().numpy()
+            for i in range(5):
+                norm = torch.norm(self.target_pos_rel, dim=-1, keepdim=True)
+                target_vec_norm = self.target_pos_rel / (norm + 1e-5)
+                pose_arrow = pose_robot[:2] + 0.1*(i+3) * target_vec_norm[self.lookat_id, :2].cpu().numpy()
+                pose = gymapi.Transform(gymapi.Vec3(pose_arrow[0], pose_arrow[1], pose_robot[2]), r=None)
+                gymutil.draw_lines(sphere_geom_arrow, self.gym, self.viewer, self.envs[self.lookat_id], pose)
+            
+            sphere_geom_arrow = gymutil.WireframeSphereGeometry(0.02, 16, 16, None, color=(0, 1, 0.5))
+            for i in range(5):
+                norm = torch.norm(self.next_target_pos_rel, dim=-1, keepdim=True)
+                target_vec_norm = self.next_target_pos_rel / (norm + 1e-5)
+                pose_arrow = pose_robot[:2] + 0.2*(i+3) * target_vec_norm[self.lookat_id, :2].cpu().numpy()
+                pose = gymapi.Transform(gymapi.Vec3(pose_arrow[0], pose_arrow[1], pose_robot[2]), r=None)
+                gymutil.draw_lines(sphere_geom_arrow, self.gym, self.viewer, self.envs[self.lookat_id], pose)
+
     def post_physics_step(self):
         """check terminations, compute observations and rewards
         calls self._post_physics_step_callback() for common computations
@@ -159,6 +213,7 @@ class LeggedRobot(BaseTask):
         self.projected_gravity[:] = quat_rotate_inverse(self.base_quat, self.gravity_vec)
         self.dof_acc = (self.last_dof_vel - self.dof_vel) / self.dt
 
+        self._update_goals()
         self._post_physics_step_callback()
 
         # compute observations, rewards, resets, ...
@@ -176,6 +231,7 @@ class LeggedRobot(BaseTask):
 
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self._draw_debug_vis()
+            self._draw_goals()
 
     def check_termination(self):
         # 检查环境是否需要重置
@@ -656,7 +712,7 @@ class LeggedRobot(BaseTask):
             self.root_states[env_ids] = self.base_init_state
             self.root_states[env_ids, :3] += self.env_origins[env_ids]
             self.root_states[env_ids, :2] += torch_rand_float(
-                -1.0, 1.0, (len(env_ids), 2), device=self.device
+                -0.2, 0.2, (len(env_ids), 2), device=self.device
             )  # xy position within 1m of the center
         else:
             self.root_states[env_ids] = self.base_init_state
@@ -723,12 +779,13 @@ class LeggedRobot(BaseTask):
             return
         distance = torch.norm(self.root_states[env_ids, :2] - self.env_origins[env_ids, :2], dim=1) # 机器人当前离原点的距离
         # robots that walked far enough progress to harder terains
-        move_up = distance > self.terrain.env_length / 2 # 如果机器人移动距离超过地形长度的一半,则标记为需要升级地形
+        move_up = distance > self.terrain.env_length * 0.45 # 如果机器人移动距离超过地形长度的一半,则标记为需要升级地形
+        move_down = distance < self.terrain.env_length * 0.3 * ~move_up
         # robots that walked less than half of their required distance go to simpler terrains
-        move_down = ( # 当前环境跟踪速度的总奖励/最大回合长度<线速度跟踪奖励缩放因子/仿真时间步长
-            self.episode_sums["tracking_lin_vel"][env_ids] / self.max_episode_length_s
-            < (self.reward_scales["tracking_lin_vel"] / self.dt) * 0.4 # 完美跟踪时最大奖励是1*self.reward_scales["tracking_lin_vel"],因此这里表示了0.4倍最大奖励
-        ) * ~move_up
+        # move_down = ( # 当前环境跟踪速度的总奖励/最大回合长度<线速度跟踪奖励缩放因子/仿真时间步长
+        #     self.episode_sums["tracking_lin_vel_x"][env_ids] / self.max_episode_length_s
+        #     < (self.reward_scales["tracking_lin_vel_x"] / self.dt) * 0.4 # 完美跟踪时最大奖励是1*self.reward_scales["tracking_lin_vel_x"],因此这里表示了0.4倍最大奖励
+        # ) * ~move_up
         self.terrain_levels[env_ids] += 1 * move_up - 1 * move_down # 地形难度要么加1要么减1
         mask = self.terrain_levels[env_ids] >= self.max_terrain_level # 检测哪些环境已达到最大难度级别,并将其标记为成功
         self.success_ids = env_ids[mask] # 布尔掩码索引,只返回mask为true的那些值的环境id
@@ -741,6 +798,7 @@ class LeggedRobot(BaseTask):
             torch.clip(self.terrain_levels[env_ids], 0), # 对于没有达到最大难度的环境,保持原有难度,但确保不低于0
         )  # (the minumum level is zero)
         self.env_origins[env_ids] = self.terrain_origins[self.terrain_levels[env_ids], self.terrain_types[env_ids]] # 重新设置原点
+        # self._update_goals_for_envs(env_ids)
         if self.cfg.commands.curriculum: # 如果命令启用课程学习,对失败的环境进行课程学习调整,降低任务难度
             self.command_ranges["lin_vel_x"][self.fail_ids, 0] = torch.clip( 
                 self.command_ranges["lin_vel_x"][self.fail_ids, 0] + 0.25,
@@ -753,6 +811,27 @@ class LeggedRobot(BaseTask):
                 self.cfg.commands.basic_max_curriculum,
             )
 
+    # def _update_goals_for_envs(self, env_ids):
+    #     """为指定环境更新目标点"""
+    #     if len(env_ids) == 0:
+    #         return
+    #     # 1. 从 terrain_goals 获取新目标点
+    #     # terrain_goals 形状: [num_rows, num_cols, num_goals, 3]
+    #     new_goals = self.terrain_goals[self.terrain_levels[env_ids], self.terrain_types[env_ids]]
+    #     # new_goals 形状: [len(env_ids), num_goals, 3]
+    #     # 2. 更新 env_goals
+    #     # 先获取最后一个目标点用于补齐
+    #     last_goal = new_goals[:, -1, :].unsqueeze(1)  # [len(env_ids), 1, 3]
+    #     # 拼接当前目标和未来目标
+    #     future_goals = last_goal.repeat(1, self.cfg.env.num_future_goal_obs, 1)
+    #     self.env_goals[env_ids] = torch.cat((new_goals, future_goals), dim=1)
+    #     # 3. 重置当前目标索引
+    #     self.cur_goal_idx[env_ids] = 0
+    #     # 4. 更新当前目标和下一个目标
+    #     self.cur_goals[env_ids] = self.env_goals[env_ids, 0, :]
+    #     if self.cfg.env.num_future_goal_obs > 0:
+    #         self.next_goals[env_ids] = self.env_goals[env_ids, 1, :]
+
     def update_command_curriculum(self, env_ids):
         """Implements a curriculum of increasing commands
 
@@ -764,8 +843,8 @@ class LeggedRobot(BaseTask):
             # self.basic_terrain_idx = torch.cat((self.stair_up_idx, self.discrete_idx))
             # self.advanced_terrain_idx
             mask = ( # 课程学习阈值0.7
-                self.episode_sums["tracking_lin_vel"][self.success_ids] / self.max_episode_length
-                > self.cfg.commands.curriculum_threshold * self.reward_scales["tracking_lin_vel"]
+                self.episode_sums["tracking_lin_vel_x"][self.success_ids] / self.max_episode_length
+                > self.cfg.commands.curriculum_threshold * self.reward_scales["tracking_lin_vel_x"]
             )
             success_ids = self.success_ids[mask]
             basic_ids = torch.any(success_ids.unsqueeze(1) == self.basic_terrain_idx.unsqueeze(0), dim=1) # success_ids维度为K,basic_terrain_idx维度为M,则basic_ids维度(K,M),(i,j)为K(i)与M(j)的比较值
@@ -787,8 +866,8 @@ class LeggedRobot(BaseTask):
             )
         if self.cfg.terrain.curriculum == False: # 如果没有启用课程学习
             if ( # 检查机器人线速度和角速度跟踪奖励率是否大于阈值,超过阈值则调节功能命令范围
-                torch.mean(self.episode_sums["tracking_lin_vel"][env_ids]) / self.max_episode_length
-                > self.cfg.commands.curriculum_threshold * self.reward_scales["tracking_lin_vel"]
+                torch.mean(self.episode_sums["tracking_lin_vel_x"][env_ids]) / self.max_episode_length
+                > self.cfg.commands.curriculum_threshold * self.reward_scales["tracking_lin_vel_x"]
                 and torch.mean(self.episode_sums["tracking_ang_vel"][env_ids]) / self.max_episode_length
                 > self.cfg.commands.curriculum_threshold * self.reward_scales["tracking_ang_vel"] * 0.8
             ):
@@ -921,6 +1000,8 @@ class LeggedRobot(BaseTask):
         self.last_dof_pos = torch.zeros_like(self.dof_pos) # 上一个时刻所有关节的位置
         self.last_dof_vel = torch.zeros_like(self.dof_vel) # 上一个时刻所有关节的速度
         self.last_root_vel = torch.zeros_like(self.root_states[:, 7:13]) # 上一个时刻所有环境的速度
+        self.reach_goal_timer = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)   # 到达目标点计时器
+        self.target_yaw = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)   # 目标点的yaw角度
         self.commands = torch.zeros( # 初始化命令张量,用于存储每个环境的控制指令,额外一列可能用于存储命令的持续时间或其他附加信息
             self.num_envs,
             self.cfg.commands.num_commands + 1,
@@ -1112,49 +1193,49 @@ class LeggedRobot(BaseTask):
             for name in self.reward_scales.keys()  # 为每个奖励项创建回合累计值
         }
 
-    def _create_ground_plane(self):
+    def _create_ground_plane(self):                                         # 创建无限平面地面
         """Adds a ground plane to the simulation, sets friction and restitution based on the cfg."""
-        plane_params = gymapi.PlaneParams()
-        plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)
-        plane_params.static_friction = self.cfg.terrain.static_friction
-        plane_params.dynamic_friction = self.cfg.terrain.dynamic_friction
-        plane_params.restitution = self.cfg.terrain.restitution
-        self.gym.add_ground(self.sim, plane_params)
+        plane_params = gymapi.PlaneParams()                                 # 平面参数对象
+        plane_params.normal = gymapi.Vec3(0.0, 0.0, 1.0)                    # 法向量
+        plane_params.static_friction = self.cfg.terrain.static_friction     # 地面静摩擦力
+        plane_params.dynamic_friction = self.cfg.terrain.dynamic_friction   # 地面动摩擦力
+        plane_params.restitution = self.cfg.terrain.restitution             # 弹性系数
+        self.gym.add_ground(self.sim, plane_params)                         # 加载参数
 
-    def _create_heightfield(self):
+    def _create_heightfield(self):                                          # 创建heightfield地形并添加到仿真
         """Adds a heightfield terrain to the simulation, sets parameters based on the cfg."""
-        hf_params = gymapi.HeightFieldParams()
-        hf_params.column_scale = self.terrain.cfg.horizontal_scale
-        hf_params.row_scale = self.terrain.cfg.horizontal_scale
-        hf_params.vertical_scale = self.terrain.cfg.vertical_scale
-        hf_params.nbRows = self.terrain.tot_cols
-        hf_params.nbColumns = self.terrain.tot_rows
-        hf_params.transform.p.x = -self.terrain.cfg.border_size
-        hf_params.transform.p.y = -self.terrain.cfg.border_size
-        hf_params.transform.p.z = 0.0
-        hf_params.static_friction = self.cfg.terrain.static_friction
-        hf_params.dynamic_friction = self.cfg.terrain.dynamic_friction
-        hf_params.restitution = self.cfg.terrain.restitution
+        hf_params = gymapi.HeightFieldParams()                              # 创建heightfield地形参数对象
+        hf_params.column_scale = self.terrain.cfg.horizontal_scale          # 列方向网格尺寸
+        hf_params.row_scale = self.terrain.cfg.horizontal_scale             # 行方向网格尺寸
+        hf_params.vertical_scale = self.terrain.cfg.vertical_scale          # 高度方向缩放尺寸
+        hf_params.nbRows = self.terrain.tot_cols                            # heightfield行数
+        hf_params.nbColumns = self.terrain.tot_rows                         # heightfield列数
+        hf_params.transform.p.x = -self.terrain.cfg.border_size             # 设置地形位置(x),相当于移动整张地图使得terrain的零点与世界零点对齐
+        hf_params.transform.p.y = -self.terrain.cfg.border_size             # 设置地形位置(y)
+        hf_params.transform.p.z = 0.0                                       # 设置地形高度
+        hf_params.static_friction = self.cfg.terrain.static_friction        # 设置静摩擦力
+        hf_params.dynamic_friction = self.cfg.terrain.dynamic_friction      # 设置动摩擦力
+        hf_params.restitution = self.cfg.terrain.restitution                # 设置弹性系数
 
-        self.gym.add_heightfield(self.sim, self.terrain.heightsamples, hf_params)
-        self.height_samples = (
+        self.gym.add_heightfield(self.sim, self.terrain.heightsamples, hf_params)   # 加载高度图
+        self.height_samples = (                                             # 保存height_samples到pyTorch
             torch.tensor(self.terrain.heightsamples).view(self.terrain.tot_rows, self.terrain.tot_cols).to(self.device)
         )
 
-    def _create_trimesh(self):
+    def _create_trimesh(self):                                              # 创建三角网格地形并加入仿真
         """Adds a triangle mesh terrain to the simulation, sets parameters based on the cfg.
         #"""
-        tm_params = gymapi.TriangleMeshParams()
-        tm_params.nb_vertices = self.terrain.vertices.shape[0]
-        tm_params.nb_triangles = self.terrain.triangles.shape[0]
+        tm_params = gymapi.TriangleMeshParams()                             # 创建对象
+        tm_params.nb_vertices = self.terrain.vertices.shape[0]              # mesh的顶点数量
+        tm_params.nb_triangles = self.terrain.triangles.shape[0]            # mesh的三角形数量
 
-        tm_params.transform.p.x = -self.terrain.cfg.border_size
+        tm_params.transform.p.x = -self.terrain.cfg.border_size             # 设置terrain在世界中的起点x和y,保证除去边界后能够和世界原点对齐
         tm_params.transform.p.y = -self.terrain.cfg.border_size
         tm_params.transform.p.z = 0.0
-        tm_params.static_friction = self.cfg.terrain.static_friction
-        tm_params.dynamic_friction = self.cfg.terrain.dynamic_friction
-        tm_params.restitution = self.cfg.terrain.restitution
-        self.gym.add_triangle_mesh(
+        tm_params.static_friction = self.cfg.terrain.static_friction        # 静摩擦力
+        tm_params.dynamic_friction = self.cfg.terrain.dynamic_friction      # 动摩擦力
+        tm_params.restitution = self.cfg.terrain.restitution                # 弹性系数
+        self.gym.add_triangle_mesh(                                         # 把mesh加入物理世界
             self.sim,
             self.terrain.vertices.flatten(order="C"),
             self.terrain.triangles.flatten(order="C"),
@@ -1234,7 +1315,7 @@ class LeggedRobot(BaseTask):
             # create env instance
             env_handle = self.gym.create_env(self.sim, env_lower, env_upper, int(np.sqrt(self.num_envs))) # 创建环境实例
             pos = self.env_origins[i].clone() # 设置当前环境原点位置,这在前面已经获取过
-            pos[:2] += torch_rand_float(-1.0, 1.0, (2, 1), device=self.device).squeeze(1) # 在x和y方向上加随机偏移,增加环境的多样性
+            pos[:2] += torch_rand_float(-0.2, 0.2, (2, 1), device=self.device).squeeze(1) # 在x和y方向上加随机偏移,增加环境的多样性
             start_pose.p = gymapi.Vec3(*pos)
 
             rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i) # 处理刚体形状属性(可能添加随机化)
@@ -1342,6 +1423,15 @@ class LeggedRobot(BaseTask):
                 self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length + self.cfg.terrain.border_size
             )
             self.terrain_y_min = -self.cfg.terrain.border_size
+
+            self.terrain_goals = torch.from_numpy(self.terrain.goals).to(self.device).to(torch.float)           # 地形目标点,不同地形难度不同地形种类的目标点不一样
+            self.env_goals = torch.zeros(self.num_envs, self.cfg.terrain.num_goals + self.cfg.env.num_future_goal_obs, 3, device=self.device, requires_grad=False)  # 为每个环境分配目标点
+            self.cur_goal_idx = torch.zeros(self.num_envs, device=self.device, requires_grad=False, dtype=torch.long)   # 当前目标索引
+            temp = self.terrain_goals[self.terrain_levels, self.terrain_types]                                  # 拿出当前env对应的目标点
+            last_col = temp[:, -1].unsqueeze(1)                                                                 # 如果未来目标不够,始终用最后一个目标补齐
+            self.env_goals[:] = torch.cat((temp, last_col.repeat(1, self.cfg.env.num_future_goal_obs, 1)), dim=1)[:]
+            self.cur_goals = self._gather_cur_goals()                                                           # 当前要去的目标点
+            self.next_goals = self._gather_cur_goals(future=1)                                                  # 下一个目标点
         else:
             self.custom_origins = False # 平台地形不使用自定义原点
             self.env_origins = torch.zeros(self.num_envs, 3, device=self.device, requires_grad=False) # 环境原点初始化
@@ -1354,6 +1444,9 @@ class LeggedRobot(BaseTask):
             self.env_origins[:, 1] = spacing * yy.flatten()[: self.num_envs]
             self.env_origins[:, 2] = 0.0
             self.flat_idx = torch.arange(self.num_envs, device=self.device) # 均为平坦地形
+
+    def _gather_cur_goals(self, future=0):              # 取对应未来步数的三维目标值
+        return self.env_goals.gather(1, (self.cur_goal_idx[:, None, None]+future).expand(-1, -1, self.env_goals.shape[-1])).squeeze(1)
 
     def _parse_cfg(self, cfg):
         self.dt = self.cfg.control.decimation * self.sim_params.dt # 算法迭代周期 = 控制频率相对于仿真频率降低倍数(降频因子)*物理仿真周期

@@ -33,6 +33,7 @@ from wheel_legged_gym import WHEEL_LEGGED_GYM_ROOT_DIR
 
 import isaacgym
 from isaacgym.torch_utils import *
+from isaacgym import gymapi
 
 from wheel_legged_gym.envs import *
 from wheel_legged_gym.utils import get_args, export_policy_as_jit, task_registry, Logger
@@ -48,11 +49,11 @@ def play(args):
     # override some parameters for testing
     env_cfg.env.episode_length_s = 20
     env_cfg.env.fail_to_terminal_time_s = 3
-    env_cfg.env.num_envs = min(env_cfg.env.num_envs, 1)
+    env_cfg.env.num_envs = min(env_cfg.env.num_envs, 20)
     env_cfg.commands.resampling_time = 1000  # 重采样间隔 （s）
-    env_cfg.terrain.mesh_type = "plane"
-    env_cfg.terrain.num_rows = 5
-    env_cfg.terrain.num_cols = 10
+    env_cfg.terrain.mesh_type = "trimesh"
+    env_cfg.terrain.num_rows = 2
+    env_cfg.terrain.num_cols = 5
     env_cfg.terrain.max_init_terrain_level = env_cfg.terrain.num_rows - 1
     env_cfg.terrain.curriculum = False
     env_cfg.noise.add_noise = True
@@ -112,6 +113,12 @@ def play(args):
     vel_err_intergral = torch.zeros(env.num_envs, device=env.device)
     vel_cmd = torch.zeros(env.num_envs, device=env.device)
 
+    WHEEL_COLORS = {
+            0: gymapi.Vec3(1.0, 0.0, 0.0),  # 红色
+            1: gymapi.Vec3(0.0, 1.0, 0.0),  # 绿色
+        }
+
+
     for i in tqdm(range(stop_state_log)):
 
         if ppo_runner.alg.actor_critic.is_sequence:
@@ -119,19 +126,30 @@ def play(args):
         else:
             actions = policy(obs.detach())
 
-        env.commands[:, 0] = 0.0    # lin_vel_x
+        env.commands[:, 0] = 0.5    # lin_vel_x
         env.commands[:, 1] = 0      # lin_vel_y
         env.commands[:, 2] = 0      # ang_vel
         env.commands[:, 3] = 0.651  # height
-        env.commands[:, 5] = 0.9    # gait_resample
+        env.commands[:, 5] = 0    # gait_resample
 
         if i > 300 and i<=1500:
             vel_cmd[:] = env.commands[:, 0] * np.clip((i - 300) * 0.05, 0, 1)
         else:
-            vel_cmd[:] = 0
+            vel_cmd[:] = 0.5
         env.commands[:, 0] = vel_cmd
 
         obs, _, rews, dones, infos, obs_history = env.step(actions)
+
+        for robot_id in range(env.num_envs):
+            wheel_color = WHEEL_COLORS.get(env.has_swing[robot_id].item(), gymapi.Vec3(0.0, 0.0, 1.0))
+            for wheel_id in env.wheel_link_indices:
+                env.gym.set_rigid_body_color(
+                    env.envs[robot_id],
+                    env.actor_handles[robot_id],
+                wheel_id,
+                gymapi.MESH_VISUAL,
+                wheel_color,
+            )
 
         if RECORD_FRAMES:
             if i % 2:

@@ -64,7 +64,7 @@ void MyController(const mjModel* m, mjData* d) {
   static double count_num_plus = 0;
   if(count_num > 2000 && count_num <= 10000){
     robot_model.gait_enable_ = true;
-    robot_model.phase_ = std::fmod(count_num_plus * 0.01, 0.6) / 0.6;
+    robot_model.phase_ = std::fmod(count_num_plus * 0.005, 0.6) / 0.6;
     count_num_plus++;
   }else if(count_num > 10000){
     robot_model.gait_enable_ = false;
