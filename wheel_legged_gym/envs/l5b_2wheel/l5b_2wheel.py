@@ -1971,9 +1971,9 @@ class L5B_2WHEEL(LeggedRobot):
         """
         foot_height = self.wheel_pos[:, :, 2]
         terrain_height = self._get_terrain_height_at_feet()
-        # clearance = foot_height - terrain_height - self.cfg.asset.wheel_radius
-        clearance = foot_height - self.cfg.asset.wheel_radius
-        # print("clearance:", clearance)
+        clearance = foot_height - terrain_height - self.cfg.asset.wheel_radius
+        # clearance = foot_height - self.cfg.asset.wheel_radius
+        # print("clearance:", clearance[0])
 
         h_min = 0.16
         h_max = 0.18
