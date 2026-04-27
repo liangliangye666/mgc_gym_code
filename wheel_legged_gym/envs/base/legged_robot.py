@@ -70,7 +70,9 @@ class LeggedRobot(BaseTask):
         self.cfg = cfg # 读取机器人训练环境配置参数
         self.sim_params = sim_params # 读取仿真参数设置
         self.height_samples = None # 高度采样
-        self.debug_viz = True # 调试可视化标志位
+        self.debug_viz = False # 调试可视化标志位
+        if self.cfg.terrain.mesh_type in ["heightfield", "trimesh"]:
+            self.debug_viz = True
         self.init_done = False # 初始化完成标志位
         self._parse_cfg(self.cfg) # 解析机器人环境配置
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless) # 配置机器人仿真环境参数信息,包括asset的属性以及各个环境的实例化等
@@ -185,13 +187,13 @@ class LeggedRobot(BaseTask):
                 pose = gymapi.Transform(gymapi.Vec3(pose_arrow[0], pose_arrow[1], pose_robot[2]), r=None)
                 gymutil.draw_lines(sphere_geom_arrow, self.gym, self.viewer, self.envs[self.lookat_id], pose)
             
-            sphere_geom_arrow = gymutil.WireframeSphereGeometry(0.02, 16, 16, None, color=(0, 1, 0.5))
-            for i in range(5):
-                norm = torch.norm(self.next_target_pos_rel, dim=-1, keepdim=True)
-                target_vec_norm = self.next_target_pos_rel / (norm + 1e-5)
-                pose_arrow = pose_robot[:2] + 0.2*(i+3) * target_vec_norm[self.lookat_id, :2].cpu().numpy()
-                pose = gymapi.Transform(gymapi.Vec3(pose_arrow[0], pose_arrow[1], pose_robot[2]), r=None)
-                gymutil.draw_lines(sphere_geom_arrow, self.gym, self.viewer, self.envs[self.lookat_id], pose)
+            # sphere_geom_arrow = gymutil.WireframeSphereGeometry(0.02, 16, 16, None, color=(0, 1, 0.5))
+            # for i in range(5):
+            #     norm = torch.norm(self.next_target_pos_rel, dim=-1, keepdim=True)
+            #     target_vec_norm = self.next_target_pos_rel / (norm + 1e-5)
+            #     pose_arrow = pose_robot[:2] + 0.2*(i+3) * target_vec_norm[self.lookat_id, :2].cpu().numpy()
+            #     pose = gymapi.Transform(gymapi.Vec3(pose_arrow[0], pose_arrow[1], pose_robot[2]), r=None)
+            #     gymutil.draw_lines(sphere_geom_arrow, self.gym, self.viewer, self.envs[self.lookat_id], pose)
 
     def post_physics_step(self):
         """check terminations, compute observations and rewards
@@ -351,11 +353,11 @@ class LeggedRobot(BaseTask):
             # 调用奖励函数并乘以相应的权重
             rew = self.reward_functions[i]() * self.reward_scales[name]
             # 裁剪奖励值，防止奖励值过大或过小, 单个奖励的最大值为1
-            rew = torch.clip(
-                rew,
-                -self.cfg.rewards.clip_single_reward * self.dt,
-                self.cfg.rewards.clip_single_reward * self.dt,
-            )
+            # rew = torch.clip(
+            #     rew,
+            #     -self.cfg.rewards.clip_single_reward * self.dt,
+            #     self.cfg.rewards.clip_single_reward * self.dt,
+            # )
             # 将裁剪后的奖励值加到奖励缓冲区中
             self.rew_buf += rew
             # 将裁剪后的奖励值加到该奖励项的总累计奖励中
@@ -780,7 +782,7 @@ class LeggedRobot(BaseTask):
         distance = torch.norm(self.root_states[env_ids, :2] - self.env_origins[env_ids, :2], dim=1) # 机器人当前离原点的距离
         # robots that walked far enough progress to harder terains
         move_up = distance > self.terrain.env_length * 0.45 # 如果机器人移动距离超过地形长度的一半,则标记为需要升级地形
-        move_down = distance < self.terrain.env_length * 0.3 * ~move_up
+        move_down = distance < self.terrain.env_length * 0.3
         # robots that walked less than half of their required distance go to simpler terrains
         # move_down = ( # 当前环境跟踪速度的总奖励/最大回合长度<线速度跟踪奖励缩放因子/仿真时间步长
         #     self.episode_sums["tracking_lin_vel_x"][env_ids] / self.max_episode_length_s
@@ -1427,7 +1429,8 @@ class LeggedRobot(BaseTask):
             self.terrain_goals = torch.from_numpy(self.terrain.goals).to(self.device).to(torch.float)           # 地形目标点,不同地形难度不同地形种类的目标点不一样
             self.env_goals = torch.zeros(self.num_envs, self.cfg.terrain.num_goals + self.cfg.env.num_future_goal_obs, 3, device=self.device, requires_grad=False)  # 为每个环境分配目标点
             self.cur_goal_idx = torch.zeros(self.num_envs, device=self.device, requires_grad=False, dtype=torch.long)   # 当前目标索引
-            temp = self.terrain_goals[self.terrain_levels, self.terrain_types]                                  # 拿出当前env对应的目标点
+            env_ids = torch.arange(self.num_envs, device=self.device)
+            temp = self.terrain_goals[self.terrain_levels[env_ids], self.terrain_types[env_ids]]                # 拿出当前env对应的目标点
             last_col = temp[:, -1].unsqueeze(1)                                                                 # 如果未来目标不够,始终用最后一个目标补齐
             self.env_goals[:] = torch.cat((temp, last_col.repeat(1, self.cfg.env.num_future_goal_obs, 1)), dim=1)[:]
             self.cur_goals = self._gather_cur_goals()                                                           # 当前要去的目标点

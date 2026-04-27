@@ -59,10 +59,10 @@ void FSM::Run(RobotModel& robot_model) {
 
 bool FSM::CheckSafety(RobotModel& robot_model) {
   std::vector<Limits> joint_limits = {
-      {AllJoints::left_hip_roll_joint, -0.384 + 0.09, 1.396 - 0.09, -16, 16, -90, 90},  {AllJoints::left_hip_pitch_joint, -1.012 + 0.09, 1.396 - 0.09, -16, 16, -90, 90},
-      {AllJoints::left_knee_joint, -1.309 + 0.09, 0.262 - 0.09, -14, 14, -130, 130},      {AllJoints::left_wheel_joint, -1000, 1000, -15, 15, -60, 60},
-      {AllJoints::right_hip_roll_joint, -0.384 + 0.09, 1.396- 0.09, -16, 16, -90, 90}, {AllJoints::right_hip_pitch_joint, -1.012 + 0.09, 1.396 - 0.09, -16, 16, -90, 90},
-      {AllJoints::right_knee_joint, -1.309 + 0.09, 0.262 - 0.09, -14, 14, -130, 130},     {AllJoints::right_wheel_joint, -1000, 1000, -15, 15, -60, 60}};
+      {AllJoints::left_hip_roll_joint, -0.384 + 0.05, 1.396 - 0.05, -16, 16, -90, 90},  {AllJoints::left_hip_pitch_joint, -1.012 + 0.05, 1.396 - 0.05, -16, 16, -90, 90},
+      {AllJoints::left_knee_joint, -1.309 + 0.05, 0.262 - 0.05, -14, 14, -130, 130},      {AllJoints::left_wheel_joint, -1000, 1000, -15, 15, -60, 60},
+      {AllJoints::right_hip_roll_joint, -0.384 + 0.05, 1.396- 0.05, -16, 16, -90, 90}, {AllJoints::right_hip_pitch_joint, -1.012 + 0.05, 1.396 - 0.05, -16, 16, -90, 90},
+      {AllJoints::right_knee_joint, -1.309 + 0.05, 0.262 - 0.05, -14, 14, -130, 130},     {AllJoints::right_wheel_joint, -1000, 1000, -15, 15, -60, 60}};
 
   for (const auto& limit : joint_limits) {
     int index = static_cast<int>(limit.joint);

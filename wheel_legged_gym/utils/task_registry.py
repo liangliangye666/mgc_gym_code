@@ -205,7 +205,7 @@ class TaskRegistry:
                 log_root,
                 datetime.now().strftime("%b%d_%H-%M-%S") + "_" + train_cfg.runner.run_name + args.exptid,
             )
-
+        print("logdir is:", self.log_dir)
         train_cfg_dict = class_to_dict(train_cfg)
         runner = OnPolicyRunner(env, train_cfg_dict, self.log_dir, device=args.rl_device) # env是训练方法类对象,train_cfg_dict是训练算法配置参数
         # save resume path before creating a new log_dir

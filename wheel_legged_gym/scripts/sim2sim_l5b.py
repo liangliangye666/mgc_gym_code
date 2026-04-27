@@ -41,11 +41,11 @@ import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor
 
 
 class cmd:
-    vel_x = -0.0
+    vel_x = 0.2
     vel_y = 0.0
     vel_yaw = 0.0
-    height = 0.651
-    heading = 0
+    height = 0.6464
+    heading = -0
 
 
 def quaternion_to_euler_array(quat):
@@ -109,23 +109,56 @@ def quat_from_euler_zyx(euler_zyx):
 
     return np.array([x, y, z, w])
 
-def get_obs(data):
+# def get_obs(data):
+#     """Extracts an observation from the mujoco data structure"""
+#     q = data.qpos.astype(np.double)
+#     # print("q: ", q[:3]), 打印x,y,z
+#     dq = data.qvel.astype(np.double)
+#     # print("dq: ", dq[:6]), 打印vx,vy,vz,wx,wy,wz
+#     quat = data.sensor("orientation").data[[1, 2, 3, 0]].astype(np.double) # 读取四元数姿态信息,并且重新排列,保存为double类型
+#     r = R.from_quat(quat)
+#     v = r.apply(data.qvel[:3], inverse=True).astype(np.double)  # In the base frame,基座坐标系中的速度
+#     omega = data.sensor("angular-velocity").data.astype(np.double)
+#     gvec = r.apply(np.array([0.0, 0.0, -1.0]), inverse=True).astype(np.double) # 基座坐标系中力方向[gx, gy, gz]
+
+#     # ddq = data.qacc.astype(np.double)
+#     # print("ddq: ", ddq[:3])
+#     # q-117维,dq-16维,quat-4维,v-3维,omega-3维,gvec-3维
+#     return (q, dq, quat, v, omega, gvec)
+
+def get_obs(data, last_q, dt):
     """Extracts an observation from the mujoco data structure"""
     q = data.qpos.astype(np.double)
-    # print("q: ", q[:3]), 打印x,y,z
-    dq = data.qvel.astype(np.double)
-    # print("dq: ", dq[:6]), 打印vx,vy,vz,wx,wy,wz
+    dq = data.qvel.astype(np.double).copy()
+    joint_diff = (q[7:] - last_q[7:] + np.pi) % (2 * np.pi) - np.pi
+    dq[6:] = joint_diff / dt
+    last_q_new = q.copy()
     quat = data.sensor("orientation").data[[1, 2, 3, 0]].astype(np.double) # 读取四元数姿态信息,并且重新排列,保存为double类型
     r = R.from_quat(quat)
     v = r.apply(data.qvel[:3], inverse=True).astype(np.double)  # In the base frame,基座坐标系中的速度
     omega = data.sensor("angular-velocity").data.astype(np.double)
     gvec = r.apply(np.array([0.0, 0.0, -1.0]), inverse=True).astype(np.double) # 基座坐标系中力方向[gx, gy, gz]
+    pos = data.xpos[1].astype(np.double)
+    print("pos", pos)
+    return (q, dq, quat, v, omega, gvec, last_q_new, pos)
 
-    # ddq = data.qacc.astype(np.double)
-    # print("ddq: ", ddq[:3])
-    # q-117维,dq-16维,quat-4维,v-3维,omega-3维,gvec-3维
-    return (q, dq, quat, v, omega, gvec)
+def print_all_geoms(model):
+    for i in range(model.ngeom):
+        name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, i)
+        print(f"id={i}, name={name}")
 
+def print_wheel_contact_forces(model, data):
+    wheel_ids = [14, 15, 22, 23]
+
+    for i in range(data.ncon):
+        contact = data.contact[i]
+
+        if contact.geom1 in wheel_ids or contact.geom2 in wheel_ids:
+            force = np.zeros(6)
+            mujoco.mj_contactForce(model, data, i, force)
+
+            print(f"contact {i}: geom1={contact.geom1}, geom2={contact.geom2}")
+            print("force:", force[:3])
 
 def pd_control(target_q,default_q, q, kp, target_dq, dq, kd): # target_q:目标位置增量,default_q:关节默认位置/中立位置
     """Calculates torques from position commands"""
@@ -167,7 +200,8 @@ def run_mujoco(policy, cfg):
 
     model.opt.timestep = cfg.sim_config.dt
     data = mujoco.MjData(model)
-
+    print("-----------contact---------")
+    print_all_geoms(model)
     # Set the initial state
     initialize_qpos(model, data)
 
@@ -182,24 +216,41 @@ def run_mujoco(policy, cfg):
     action = np.zeros((cfg.env.num_actions), dtype=np.double)
 
     count_lowlevel = 0
+    last_q = data.qpos.copy()
 
 
     for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
         phase = (count_lowlevel * 0.01) % 0.6 / 0.6
-        if count_lowlevel < 1000:
-            gait_enable = 0
-        elif count_lowlevel < 3000:
-            gait_enable = 1
-        else:
-            gait_enable = 0
+        # if count_lowlevel < 1000:
+        #     vel = 0.0
+        #     distance = 0.2
+        #     gait_enable = 0
+        # elif count_lowlevel < 3000:
+        #     vel = 0.2
+        #     distance = 1.0
+        #     gait_enable = 1
+        # else:
+        #     vel = 0.0
+        #     distance = 0.2
+        #     gait_enable = 0
         # Obtain an observation
-        q, dq, quat, v, omega, gvec = get_obs(data) # 获取17+16+4+3+3+3=46维的观测量
-
+        q, dq, quat, v, omega, gvec, last_q, pos = get_obs(data, last_q, cfg.sim_config.dt) # 获取17+16+4+3+3+3=46维的观测量
+        # print_wheel_contact_forces(model, data)
         # without yaw
         base_euler_zyx = get_euler_zyx_tensor(quat)
         base_euler_zyx_local = base_euler_zyx
         base_euler_zyx_local[2] = 0
         base_quat_local = quat_from_euler_zyx(base_euler_zyx_local)
+        # cur = np.array([pos[0], base_euler_zyx[2]])
+        cur = np.array([pos[0], pos[1]])
+        goal = np.array([10.0, 0.0])
+        delta = goal - cur
+        norm = np.linalg.norm(delta) + 1e-5  # 避免除零
+        target_vec_norm = delta / norm
+        print("target_vec_norm:", target_vec_norm)
+
+
+
 
         # right_hip_joint right_knee_joint rf_wheel_joint rb_wheel_joint
         # left_hip_joint left_knee_joint lf_wheel_joint lb_wheel_joint
@@ -230,10 +281,12 @@ def run_mujoco(policy, cfg):
         # obs[0, 33] = gait_enable
         # obs[0, 34] = np.sin(2 * np.pi * phase) * gait_enable
         # obs[0, 35] = np.cos(2 * np.pi * phase) * gait_enable
+        obs[0, 33] = 1
+        # obs[0, 34] = target_vec_norm[1]
 
-        obs[0,33]=v[0]
-        obs[0,34]=v[1]
-        obs[0,35]=v[2]
+        obs[0,34]=v[0]
+        obs[0,35]=v[1]
+        obs[0,36]=v[2]
         # obs[0,34:37]=base_euler_zyx
 
         obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
@@ -282,7 +335,7 @@ if __name__ == "__main__":
             if args.terrain:
                 mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l2c/mjcf/y1a-terrain.xml"
             else:
-                mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/xml/l5aurdf20260209.xml"
+                mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/xml/l5aurdf20260420.xml"
             sim_duration = 200.0 # 单次仿真持续时间为10s
             dt = 0.005 # 仿真步长为0.005s
             decimation = 2 # 设置控制频率与仿真频率的比值为10,即每隔10步执行一次控制策略

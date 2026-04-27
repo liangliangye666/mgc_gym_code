@@ -49,8 +49,8 @@ extern "C" {
 #endif
 }
 
-std::string urdf_path = "/sim/model/l5a/urdf/l5aurdf20260209.urdf";
-std::string xml_path = "/sim/model/l5a/xml/l5aurdf20260209.xml";
+std::string urdf_path = "/sim/model/l5a/urdf/l5aurdf20260420.urdf";
+std::string xml_path = "/sim/model/l5a/xml/l5aurdf20260420.xml";
 
 void MyController(const mjModel* m, mjData* d) {
   static l5a::RobotModel robot_model(urdf_path);
@@ -64,7 +64,7 @@ void MyController(const mjModel* m, mjData* d) {
   static double count_num_plus = 0;
   if(count_num > 2000 && count_num <= 10000){
     robot_model.gait_enable_ = true;
-    robot_model.phase_ = std::fmod(count_num_plus * 0.005, 0.6) / 0.6;
+    robot_model.phase_ = std::fmod(count_num_plus * 0.005, 0.5) / 0.5;
     count_num_plus++;
   }else if(count_num > 10000){
     robot_model.gait_enable_ = false;
@@ -81,8 +81,25 @@ void MyController(const mjModel* m, mjData* d) {
   pos_cmd = fsm.pos();
   // std::cout << "tau_cmd:" << tau_cmd << std::endl;
 
+  // test PD paras for RL training
+  // Eigen::VectorXd default_pos(8);
+  // default_pos << 0.0872665, 0.261799, -0.510893, 0, 0.0872665, 0.261799, -0.510893, 0;
+  // Eigen::VectorXd default_vel = Eigen::VectorXd::Zero(8);
+  // Eigen::VectorXd actual_pos = robot_model.q_fixed;
+  // Eigen::VectorXd actual_vel = robot_model.qdot.segment(6, robot_model.pino_model().nv-6);
+  // Eigen::VectorXd Kp(8);
+  // Eigen::VectorXd Ki(8);
+  // Eigen::VectorXd Kd(8);
+  // Kp = fsm.pos_fb_kp_;
+  // Ki << 0, 0, 0, 1, 0, 0, 0, 1;
+  // Kd = fsm.pos_fb_kd_;
+  // Eigen::VectorXd pos_error = default_pos - actual_pos;
+  // Eigen::VectorXd vel_error = default_vel - actual_vel;
+  // Eigen::VectorXd tau_pure_ff = Kp.cwiseProduct(pos_error) + Kd.cwiseProduct(vel_error);
+
   for (size_t i = 0; i < robot_model.pino_model().nv-6; i++) {
     d->ctrl[i] = tau_cmd[i];
+    // d->ctrl[i] = tau_pure_ff[i];    // for rl pd paras selection
   }
 }
 

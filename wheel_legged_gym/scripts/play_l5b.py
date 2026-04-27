@@ -51,11 +51,12 @@ def play(args):
     env_cfg.env.fail_to_terminal_time_s = 3
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 20)
     env_cfg.commands.resampling_time = 1000  # 重采样间隔 （s）
+    env_cfg.commands.stair_command = False
     env_cfg.terrain.mesh_type = "trimesh"
-    env_cfg.terrain.num_rows = 2
-    env_cfg.terrain.num_cols = 5
+    env_cfg.terrain.num_rows = 10
+    env_cfg.terrain.num_cols = 2
     env_cfg.terrain.max_init_terrain_level = env_cfg.terrain.num_rows - 1
-    env_cfg.terrain.curriculum = False
+    env_cfg.terrain.curriculum = True
     env_cfg.noise.add_noise = True
     env_cfg.domain_rand.randomize_friction = False
     env_cfg.domain_rand.friction_range = [0.1, 0.2]
@@ -128,8 +129,8 @@ def play(args):
 
         env.commands[:, 0] = 0.5    # lin_vel_x
         env.commands[:, 1] = 0      # lin_vel_y
-        env.commands[:, 2] = 0      # ang_vel
-        env.commands[:, 3] = 0.651  # height
+        # env.commands[:, 2] = 0      # ang_vel
+        env.commands[:, 3] = 0.6464  # height
         env.commands[:, 5] = 0    # gait_resample
 
         if i > 300 and i<=1500:

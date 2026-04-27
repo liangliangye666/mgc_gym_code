@@ -38,7 +38,7 @@ class L5B_2WHEEL_Cfg(LeggedRobotCfg):
     class env(LeggedRobotCfg.env):
         num_envs = 4096  # 4096,设置并行训练的环境数量,在仿真中会同时运行此数量的独立实例
         num_actions = 8 # 每个环境中机器人的动作空间维度,通常对应于机器人的关节数量
-        num_observations = 3 + 4 + 4 + 3 + 3 + num_actions*2 + 2 # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
+        num_observations = 3 + 4 + 4 + 3 + 3 + num_actions*2 + 1 # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量 35
         num_privileged_obs = 3 + 3 + num_observations + 3 + num_actions*4 + 7 * 11 + 3 + 1 * 3 + 6 + 15# 特权观测,评论家网络输入
         obs_history_length = 5  # number of observations stacked together,状态观测历史堆叠的长度
         obs_history_dec = 1 # 状态历史堆叠的衰减参数,当前时刻权重最高,这里设置为1说明没有衰减
@@ -89,16 +89,16 @@ class L5B_2WHEEL_Cfg(LeggedRobotCfg):
         num_goals = 1
     class init_state(LeggedRobotCfg.init_state):
 
-        pos = [0.0, 0.0, 0.651]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
+        pos = [0.0, 0.0, 0.6464]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
         rot = [0.0, 0.0, 0.0, 1.0]  # x,y,z,w [quat],base初始姿态
         default_joint_angles = {  # target angles when action = 0.0,各关节初始角度
             "left_hip_roll_joint": 0.0,
             "left_hip_pitch_joint": 0.261799,
-            "left_knee_joint": -0.508606,
+            "left_knee_joint": -0.51091,
             "left_wheel_joint": 0.0,
             "right_hip_roll_joint": 0.0, 
             "right_hip_pitch_joint": 0.261799,   
-            "right_knee_joint": -0.508606,  
+            "right_knee_joint": -0.51091,  
             "right_wheel_joint": 0.0,
         }
 
@@ -108,13 +108,13 @@ class L5B_2WHEEL_Cfg(LeggedRobotCfg):
         advanced_max_curriculum = 2 # 高级阶段的最大课程难度值
         curriculum_threshold = 0.7 # 课程学习的阈值
         resampling_time = 10.0  # time before command are changed[s],重新采样命令的时间间隔
-        heading_command = False  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
+        heading_command = True  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
         num_commands = 6 # 命令的数量
         class ranges: # 定义了每个命令可以取值的范围
-            lin_vel_x = [-0, 1]     # min max [m/s],线速度命令范围
+            lin_vel_x = [0.0, 0.5]     # min max [m/s],线速度命令范围
             lin_vel_y = [-0, 0]
-            ang_vel_yaw = [-0.5, 0.5]   # 角速度命令范围
-            height = [0.646, 0.656]     # 高度范围上下浮动3cm
+            ang_vel_yaw = [-0.0, 0.0]   # 角速度命令范围
+            height = [0.6464, 0.6464]     # 高度范围上下浮动3cm
             heading = [-3.14, 3.14]     # 朝向范围
             mode_normalization = [0, 1] # 模式归一化,暂时两个模式-步态占比0.8,两轮平衡占比0.2
         gait_command = False            # 是否开启步态训练
@@ -131,15 +131,15 @@ class L5B_2WHEEL_Cfg(LeggedRobotCfg):
 
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip_roll": 20.0, "hip_pitch": 20.0, "knee": 30.0, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip_roll": 10.0, "hip_pitch": 10.0, "knee": 20.0, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 3, "wheel": 2.0}  # [N*m*s/rad]
+        damping = {"hip_roll": 4, "hip_pitch": 4, "knee": 4, "wheel": 2.0}  # [N*m*s/rad]
 
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 2
 
     class asset(LeggedRobotCfg.asset):
-        file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/urdf/l5aurdf20260209.urdf" # 机器人urdf路径
+        file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/urdf/l5aurdf20260420.urdf" # 机器人urdf路径
         name = "l5a" # 机器人名称
         foot_name = "wheel" # 足部名称
         joint_indices = [0, 1, 2, 4, 5, 6] # 关节索引
@@ -231,33 +231,34 @@ class L5B_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
 
             # 速度跟踪
-            tracking_goal = 5
-            # position = 10
+            tracking_goal = 10
+            # position = 20
+            # velocity_limit = -2
             tracking_lin_vel_x = 1
             # tracking_lin_vel_enhance = 1
-            # tracking_lin_vel_y = 1
-            # tracking_ang_vel = 1
-            # goal_progress = 10
-            heading = 2
-            # speed_penalty = -1
-            # goal_reached = 1
+            tracking_lin_vel_y = 1
+            tracking_ang_vel = 1
+            # heading = 100
 
             # 姿态控制
             base_height = -3 # 基座高度
             lin_vel_z = -0.3 # 惩罚z轴速度
-            orientation = 1 # 基座重力投影方向
+            orientation = 2 # 基座重力投影方向
             # base_euler = 1
             leg_end_x_diff = -2 #-2 # 两条腿不要叉开
+            leg_end_y_diff = -2 #
             hip_pos = -2
             feet_distance = -10
             contact = 20
             # feet_swing_height = 100.0
-            # contact_no_vel = -5
+            contact_no_vel = -5
             # enter_gait = 10
             # gait_no_wheel_vel = 10
             feet_clearance = 20
             feet_air_time = 20
-            swing_no_wheel_vel = 0.5
+            all_air = -10
+            swing_no_wheel_vel = -500
+            air_wheel_still = -200
             feet_contact_forces = -5
             
             # 机器人姿态柔顺性
@@ -276,13 +277,12 @@ class L5B_2WHEEL_Cfg(LeggedRobotCfg):
             # dof_vel_limits = -0.001
             # torque_limits = -0.001
             # wheel_slip = -10
-            wheel_spin = -50
+            wheel_spin = -500
             # stuck = -2
             # 碰撞惩罚
-            collision = -50.0
-            # alive = 1
+            collision = -1.0
+            alive = 1
             stumble = -100
-            # successful_lift = 100
 
         # 是否只保留正奖励（true 时负的总奖励修剪为 0，防止训练中提早终止的问题）
         only_positive_rewards = False
@@ -316,8 +316,8 @@ class L5B_2WHEEL_Cfg(LeggedRobotCfg):
         # 接触力
         min_wheel_contact_force = 20.0
         max_wheel_contact_force = 300.0
-        min_feet_distance = 0.20
-        max_feet_distance = 0.40
+        min_feet_distance = 0.23
+        max_feet_distance = 0.30
     class sim(LeggedRobotCfg.sim):
         dt = 0.005  # 模拟时间步长 [秒]
         substeps = 1  # 每个时间步的子步数

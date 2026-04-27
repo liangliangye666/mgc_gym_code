@@ -44,7 +44,7 @@ class cmd:
     vel_x = -0.0
     vel_y = 0.0
     vel_yaw = 0.0
-    height = 0.651
+    height = 0.6464
     heading = 0
 
 
@@ -185,7 +185,7 @@ def run_mujoco(policy, cfg):
 
 
     for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
-        phase = (count_lowlevel * 0.01) % 0.6 / 0.6
+        phase = (count_lowlevel * 0.005) % 0.5 / 0.5
         if count_lowlevel < 1000:
             gait_enable = 0
         elif count_lowlevel < 3000:
@@ -204,6 +204,7 @@ def run_mujoco(policy, cfg):
         # right_hip_joint right_knee_joint rf_wheel_joint rb_wheel_joint
         # left_hip_joint left_knee_joint lf_wheel_joint lb_wheel_joint
         q = q[-cfg.env.num_actions :] # q和dq都取后面6个关节相关的值
+        print("q:", q)
         dq = dq[-cfg.env.num_actions :]
 
         # 1000hz -> 100hz
@@ -230,10 +231,11 @@ def run_mujoco(policy, cfg):
         obs[0, 33] = gait_enable
         obs[0, 34] = np.sin(2 * np.pi * phase) * gait_enable
         obs[0, 35] = np.cos(2 * np.pi * phase) * gait_enable
+        obs[0, 36] = 0
 
-        obs[0,36]=v[0]
-        obs[0,37]=v[1]
-        obs[0,38]=v[2]
+        obs[0,37]=v[0]
+        obs[0,38]=v[1]
+        obs[0,39]=v[2]
         # obs[0,34:37]=base_euler_zyx
 
         obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
@@ -282,7 +284,7 @@ if __name__ == "__main__":
             if args.terrain:
                 mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l2c/mjcf/y1a-terrain.xml"
             else:
-                mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/xml/l5aurdf20260209.xml"
+                mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/xml/l5aurdf20260420.xml"
             sim_duration = 200.0 # 单次仿真持续时间为10s
             dt = 0.005 # 仿真步长为0.005s
             decimation = 2 # 设置控制频率与仿真频率的比值为10,即每隔10步执行一次控制策略
@@ -290,8 +292,8 @@ if __name__ == "__main__":
         class robot_config:
             # kps = np.array([30, 50, 50, 0, 30, 50, 50, 0], dtype=np.double)
             # kds = np.array([3, 5, 5, 5, 3, 5, 5, 5], dtype=np.double)
-            kps = np.array([20, 20, 30, 0, 20, 20, 30, 0], dtype=np.double)
-            kds = np.array([2, 2, 3, 2, 2, 2, 3, 2], dtype=np.double)
+            kps = np.array([10, 10, 20, 0, 10, 10, 20, 0], dtype=np.double)
+            kds = np.array([4, 4, 4, 2, 4, 4, 4, 2], dtype=np.double)
             # tau_limit = np.array([300, 300, 60, 60, 300, 300, 60, 60], dtype=np.double)
             tau_limit = np.array([745, 745, 460, 400, 745, 745, 460, 400], dtype=np.double)
             # tau_limit = 800.0 * np.ones(8, dtype=np.double)  # 力矩限制

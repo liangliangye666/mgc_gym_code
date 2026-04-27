@@ -9,7 +9,7 @@
 
 int main(int argc, char** argv) {
   std::string workspacePath = std::getenv("PROJECT_ROOT_DIR");
-  std::string urdf_filename = workspacePath + "/sim/model/l5a/urdf/l5aurdf20260209.urdf";
+  std::string urdf_filename = workspacePath + "/sim/model/l5a/urdf/l5aurdf20260420.urdf";
   pinocchio::Model robot_model;
   pinocchio::JointModelFreeFlyer root_joint;
   pinocchio::urdf::buildModel(urdf_filename, root_joint, robot_model);
@@ -40,18 +40,21 @@ int main(int argc, char** argv) {
   std::cout << "the size of q is: " << q.size() << std::endl;
   pinocchio::JointIndex front_wheel_joint_l, front_wheel_joint_r;
   front_wheel_joint_l = robot_model.getJointId("left_wheel_joint");
+  front_wheel_joint_r = robot_model.getJointId("right_wheel_joint");
   std::cout << "left_wheel_joint id is: " << front_wheel_joint_l << std::endl;
 
-  Eigen::Vector3d whlposL, com, whl2com;
+  Eigen::Vector3d whlposL, whlposR, com, whl2com;
   double angKnee = -M_PI / 2;
   for (int i = 0;; i++) {
     angKnee += (0.001 / 180.0) * M_PI;
     // std::cout << "knee =: " << angKnee << std::endl;
+    double angRoll = (5.0 / 180.0) * M_PI;
     double angHip = (15.0 / 180.0) * M_PI;
-    q << 0, 0, 0, 0, 0, 0, 0, 0, angHip, angKnee, 0, 0, angHip, angKnee, 0;
+    q << 0, 0, 0, 0, 0, 0, 0, angRoll, angHip, angKnee, 0, angRoll, angHip, angKnee, 0;
 
     pinocchio::forwardKinematics(robot_model, robot_data, q);
     whlposL = robot_data.oMi[front_wheel_joint_l].translation();
+    whlposR = robot_data.oMi[front_wheel_joint_r].translation();
     // std::cout << "the wheel position is :" << whlposL << std::endl;
     pinocchio::centerOfMass(robot_model, robot_data, q);
     com = robot_data.com[0];
@@ -61,11 +64,14 @@ int main(int argc, char** argv) {
     double comAng = std::atan2(whl2com[0], whl2com[2]);
     // std::cout << "the comAng is :" << comAng << std::endl;
     if (std::abs(comAng) <= (0.1 / 180.0) * M_PI) {
+      std::cout << "angRoll is :" << angRoll << std::endl;
       std::cout << "angHip is :" << angHip << std::endl;
       std::cout << "angKnee is :" << angKnee << std::endl;
+      std::cout << "angRoll degree is:" << angRoll / M_PI * 180.0 << std::endl;
       std::cout << "angHip degree is:" << angHip / M_PI * 180.0 << std::endl;
       std::cout << "angKnee degree is:" << angKnee / M_PI * 180.0 << std::endl;
       std::cout << "initPos is: " << whlposL.transpose() << std::endl;
+      std::cout << "right wheel initPos is: " << whlposR.transpose() << std::endl;
       std::cout << "the center of mass is :" << com.transpose() << std::endl;
       break;
     }
