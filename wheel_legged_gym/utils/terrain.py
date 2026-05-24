@@ -145,6 +145,7 @@ class Terrain:
         random_height = 0.05 + difficulty * 0.05                # 随机高度
         step_height = 0.06 + 0.1 * difficulty                  # 台阶高度
         # step_height = 0.08                  # 台阶高度
+        step_width = 0.72 - 0.4 * difficulty
         discrete_obstacles_height = 0.03 + difficulty * 0.1     # 离散障碍物高度
         stepping_stones_size = 1.5 * (1.05 - difficulty)        # 石头尺寸
         stone_distance = 0.05 if difficulty == 0 else 0.1       # 石头距离
@@ -152,6 +153,14 @@ class Terrain:
         pit_depth = 1.0 * difficulty                            # 坑深度尺寸
         if choice < self.proportions[0]:
             terrain_utils.pyramid_sloped_terrain(terrain, slope=0, platform_size=3.0)       # 完全平地
+            num_goals = self.num_goals
+            terrain.goals = np.zeros((num_goals,3))
+            # step_width = step_width
+            for k in range(num_goals):
+                # terrain.goals[k] = [5.0 + 0.6 * k * step_width, 4.0, 0.2]
+                y_rand = np.random.uniform(-2.0, 10.0)
+                terrain.goals[k] = [9.0, y_rand, 0.2]
+                # terrain.goals[k] = [8.0, 4.0, 0.2]
         elif choice < self.proportions[1]:
             if (
                 choice
@@ -181,14 +190,16 @@ class Terrain:
             if choice < self.proportions[3]:
                 step_height *= -1
             terrain_utils.pyramid_stairs_terrain(       # 生成台阶地形
-                terrain, step_width=0.7, step_height=step_height, platform_size=4.0
+                terrain, step_width=step_width, step_height=step_height, platform_size=4.0
             )
             num_goals = self.num_goals
             terrain.goals = np.zeros((num_goals,3))
-            step_width = 0.7
+            # step_width = 0.7
             for k in range(num_goals):
                 # terrain.goals[k] = [5.0 + 0.6 * k * step_width, 4.0, 0.2]
-                terrain.goals[k] = [9.0, 4.0, 0.2]
+                y_rand = np.random.uniform(-2.0, 10.0)
+                terrain.goals[k] = [9.0, y_rand, 0.2]
+                # terrain.goals[k] = [8.0, 4.0, 0.2]
 
         elif choice < self.proportions[5]:
             num_rectangles = 4                         # 随机矩形障碍的数量
@@ -211,9 +222,9 @@ class Terrain:
             # terrain.height_field_raw[step_start:step_end,:] = step_height / 0.005#step_height
             num_goals = self.num_goals
             terrain.goals = np.zeros((num_goals,3))
-            step_width = 0.7
             for k in range(num_goals):
-                terrain.goals[k] = [5.0 + 0.6 * k * step_width, 4.0, 0.2]
+                y_rand = np.random.uniform(-2.0, 10.0)
+                terrain.goals[k] = [9.0, y_rand, 0.2]
                 # terrain.goals[k] = [8.0, 4.0, 0.2]
         elif choice < self.proportions[6]:              
             terrain_utils.stepping_stones_terrain(      # 踏石地形
@@ -251,107 +262,6 @@ class Terrain:
         )
         self.env_origins[i, j] = [env_origin_x, env_origin_y, env_origin_z]
         self.goals[i, j, :, :3] = terrain.goals + [i * self.env_length, j * self.env_width, 0]             # 把子地形goals映射到世界坐标,第i,j个环境的所有目标点的x,y值
-
-    def get_heights_at_positions(self, positions):
-            """
-            获取任意位置的地形高度（双线性插值）
-            
-            Args:
-                positions: [N, 2] or [B, N, 2] tensor - 世界坐标(x, y)
-            
-            Returns:
-                heights: [N] or [B, N] tensor - 地形高度
-            """
-            import torch
-            
-            # 保存原始形状
-            original_shape = positions.shape[:-1]
-            
-            # 重塑为 [total_points, 2]
-            if len(positions.shape) == 3:
-                batch_size, num_points, _ = positions.shape
-                positions_flat = positions.reshape(-1, 2)
-            else:
-                positions_flat = positions
-            
-            # 转换到设备
-            if not isinstance(positions_flat, torch.Tensor):
-                positions_flat = torch.tensor(positions_flat, dtype=torch.float)
-            
-            device = positions_flat.device
-            
-            # 转换到网格坐标
-            # 世界坐标 -> 像素坐标
-            px = (positions_flat[:, 0] - self.origin_x) / self.resolution
-            py = (positions_flat[:, 1] - self.origin_y) / self.resolution
-            
-            # 边界裁剪
-            px = torch.clamp(px, 0, self.grid_cols - 1.001)
-            py = torch.clamp(py, 0, self.grid_rows - 1.001)
-            
-            # 整数部分和分数部分
-            px0 = px.long()
-            py0 = py.long()
-            px1 = (px0 + 1).clamp(max=self.grid_cols - 1)
-            py1 = (py0 + 1).clamp(max=self.grid_rows - 1)
-            
-            fx = px - px0.float()
-            fy = py - py0.float()
-            
-            # 将高度场转换为tensor（如果还没转换）
-            if not hasattr(self, 'height_field_tensor'):
-                self.height_field_tensor = torch.tensor(
-                    self.height_field, device=device, dtype=torch.float
-                )
-            elif self.height_field_tensor.device != device:
-                self.height_field_tensor = self.height_field_tensor.to(device)
-            
-            # 获取四个角的高度
-            # 注意：height_field的索引是 [row, col] = [y, x]
-            h00 = self.height_field_tensor[py0, px0]
-            h01 = self.height_field_tensor[py1, px0]
-            h10 = self.height_field_tensor[py0, px1]
-            h11 = self.height_field_tensor[py1, px1]
-            
-            # 双线性插值
-            h0 = h00 * (1 - fx) + h10 * fx
-            h1 = h01 * (1 - fx) + h11 * fx
-            heights = h0 * (1 - fy) + h1 * fy
-            
-            # 恢复原始形状
-            heights = heights.reshape(*original_shape)
-            
-            return heights
-        
-    # ==================== 新增方法3：单点查询 ====================
-    def get_height_at_point(self, x, y):
-        """
-        获取单点高度（用于调试）
-        
-        Args:
-            x, y: 世界坐标
-        Returns:
-            height: 地形高度
-        """
-        import torch
-        pos = torch.tensor([[x, y]])
-        return self.get_heights_at_positions(pos)[0].item()
-    
-    # ==================== 新增方法4：查询足端下的地形 ====================
-    def get_heights_at_feet_positions(self, feet_positions):
-        """
-        专门为足端查询优化的方法
-        
-        Args:
-            feet_positions: [num_envs, num_feet, 3] - 足端世界坐标
-        Returns:
-            terrain_heights: [num_envs, num_feet] - 地形高度
-        """
-        # 提取x,y坐标
-        feet_xy = feet_positions[..., :2]
-        
-        # 查询高度
-        return self.get_heights_at_positions(feet_xy)
 
 def gap_terrain(terrain, gap_size, platform_size=1.0):                  # 挖沟
     gap_size = int(gap_size / terrain.horizontal_scale)

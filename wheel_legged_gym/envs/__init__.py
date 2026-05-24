@@ -30,85 +30,26 @@
 
 from wheel_legged_gym import WHEEL_LEGGED_GYM_ROOT_DIR, WHEEL_LEGGED_GYM_ENVS_DIR
 from .base.legged_robot import LeggedRobot
-from .wheel_legged.wheel_legged_config import WheelLeggedCfg, WheelLeggedCfgPPO
-from .wheel_legged_vmc.wheel_legged_vmc import LeggedRobotVMC
-from .wheel_legged_vmc.wheel_legged_vmc_config import (
-    WheelLeggedVMCCfg,
-    WheelLeggedVMCCfgPPO,
-)
-from .wheel_legged_vmc_flat.wheel_legged_vmc_flat_config import (
-    WheelLeggedVMCFlatCfg,
-    WheelLeggedVMCFlatCfgPPO,
-)
 
-from .y4a_2wheel.y4a_2wheel import Y4A_2WHEEL
-from .y4a_2wheel.y4a_2wheel_config import (Y4A_2WHEEL_Cfg, Y4A_2WHEEL_CfgPPO,)
 
-from .y4b_2wheel.y4b_2wheel import Y4B_2WHEEL
-from .y4b_2wheel.y4b_2wheel_config import (
-    Y4B_2WHEEL_Cfg,
-    Y4B_2WHEEL_CfgPPO,
-)
 
-from .l5a_2wheel.l5a_2wheel import L5A_2WHEEL
-from .l5a_2wheel.l5a_2wheel_config import (
-    L5A_2WHEEL_Cfg,
-    L5A_2WHEEL_CfgPPO,
-)
-
-from .l5b_2wheel.l5b_2wheel import L5B_2WHEEL
-from .l5b_2wheel.l5b_2wheel_config import (
-    L5B_2WHEEL_Cfg,
-    L5B_2WHEEL_CfgPPO,
-)
-
-import os
+import os, sys
 
 from wheel_legged_gym.utils.task_registry import task_registry
 
-task_registry.register(
-    "wheel_legged",
-    LeggedRobot,
-    WheelLeggedCfg(),
-    WheelLeggedCfgPPO(),
-)
-task_registry.register(
-    "wheel_legged_vmc",
-    LeggedRobotVMC,
-    WheelLeggedVMCCfg(),
-    WheelLeggedVMCCfgPPO(),
-)
-task_registry.register(
-    "wheel_legged_vmc_flat",
-    LeggedRobotVMC,
-    WheelLeggedVMCFlatCfg(),
-    WheelLeggedVMCFlatCfgPPO(),
-)
-
-task_registry.register(
-    "y4a_2wheel",
-    Y4A_2WHEEL,
-    Y4A_2WHEEL_Cfg(),
-    Y4A_2WHEEL_CfgPPO(),
-)
-
-task_registry.register(
-    "y4b_2wheel",
-    Y4B_2WHEEL,
-    Y4B_2WHEEL_Cfg(),
-    Y4B_2WHEEL_CfgPPO(),
-)
-
-task_registry.register(
-    "l5a_2wheel",
-    L5A_2WHEEL,
-    L5A_2WHEEL_Cfg(),
-    L5A_2WHEEL_CfgPPO(),
-)
-
-task_registry.register(
-    "l5b_2wheel",
-    L5B_2WHEEL,
-    L5B_2WHEEL_Cfg(),
-    L5B_2WHEEL_CfgPPO(),
-)
+robot_type = os.getenv("ROBOT_TYPE")
+if not robot_type:
+    print("\033[1m\033[31mError: Please set the ROBOT_TYPE using 'export ROBOT_TYPE=<robot_type>'.\033[0m")
+    sys.exit(1)
+if robot_type == "l5a_2wheel":
+    from .l5a_2wheel.l5a_2wheel import L5A_2WHEEL
+    from .l5a_2wheel.l5a_2wheel_config import (L5A_2WHEEL_Cfg, L5A_2WHEEL_CfgPPO,)
+    task_registry.register("l5a_2wheel", L5A_2WHEEL, L5A_2WHEEL_Cfg(), L5A_2WHEEL_CfgPPO())
+elif robot_type == "l5a_2wheel_gait":
+    from .l5a_2wheel_gait.l5a_2wheel import L5A_2WHEEL
+    from .l5a_2wheel_gait.l5a_2wheel_config import (L5A_2WHEEL_Cfg, L5A_2WHEEL_CfgPPO,)
+    task_registry.register("l5a_2wheel", L5A_2WHEEL, L5A_2WHEEL_Cfg(), L5A_2WHEEL_CfgPPO())
+elif robot_type == "l5a_2wheel_upstairs":
+    from .l5a_2wheel_upstairs.l5a_2wheel import L5A_2WHEEL
+    from .l5a_2wheel_upstairs.l5a_2wheel_config import (L5A_2WHEEL_Cfg, L5A_2WHEEL_CfgPPO,)
+    task_registry.register("l5a_2wheel", L5A_2WHEEL, L5A_2WHEEL_Cfg(), L5A_2WHEEL_CfgPPO())

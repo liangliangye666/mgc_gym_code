@@ -47,14 +47,17 @@ def play(args):
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
     # override some parameters for testing
     env_cfg.env.episode_length_s = 20
-    env_cfg.env.fail_to_terminal_time_s = 3
-    env_cfg.env.num_envs = min(env_cfg.env.num_envs, 1)
+    env_cfg.env.fail_to_terminal_time_s = 1
+    env_cfg.env.num_envs = min(env_cfg.env.num_envs, 20)
     env_cfg.commands.resampling_time = 1000  # 重采样间隔 （s）
-    env_cfg.terrain.mesh_type = "plane"
-    env_cfg.terrain.num_rows = 5
+    if robot_type == "l5a_2wheel_upstairs":
+        env_cfg.terrain.mesh_type = "trimesh"
+    else:
+        env_cfg.terrain.mesh_type = "plane"
+    env_cfg.terrain.num_rows = 10
     env_cfg.terrain.num_cols = 10
     env_cfg.terrain.max_init_terrain_level = env_cfg.terrain.num_rows - 1
-    env_cfg.terrain.curriculum = False
+    env_cfg.terrain.curriculum = True
     env_cfg.noise.add_noise = False
     env_cfg.domain_rand.randomize_friction = False
     env_cfg.domain_rand.friction_range = [0.1, 0.2]
@@ -119,10 +122,10 @@ def play(args):
         else:
             actions = policy(obs.detach())
 
-        env.commands[:, 0] = 0.0    # lin_vel_x
+        env.commands[:, 0] = 0.5    # lin_vel_x
         env.commands[:, 1] = 0      # lin_vel_y
         env.commands[:, 2] = 0      # ang_vel
-        env.commands[:, 3] = 0.6464  # height
+        env.commands[:, 3] = 0.645  # height
         env.commands[:, 5] = 0.2    # gait_resample
 
         if i > 300 and i<=1500:
@@ -187,14 +190,14 @@ def play(args):
                     "est_lin_vel_z": latent[robot_index, 2].item() / env.cfg.normalization.obs_scales.lin_vel,
                 }
             )
-            # if latent.shape[1] > 3 and env_cfg.noise.add_noise:
-            logger.log_states(
-                {
-                    "base_roll_obs": env.base_euler_zyx[robot_index, 0].item(),
-                    "base_pitch_obs": env.base_euler_zyx[robot_index, 1].item(),
-                    "base_yaw_obs": env.base_euler_zyx[robot_index, 2].item(),
-                }
-            )
+            if latent.shape[1] > 3 and env_cfg.noise.add_noise:
+                logger.log_states(
+                    {
+                        "base_roll_obs": env.base_euler_zyx[robot_index, 0].item(),
+                        "base_pitch_obs": env.base_euler_zyx[robot_index, 1].item(),
+                        "base_yaw_obs": env.base_euler_zyx[robot_index, 2].item(),
+                    }
+                )
             if latent.shape[1] > 3 and env_cfg.noise.add_noise:
                 logger.log_states(
                     {

@@ -33,11 +33,10 @@ from wheel_legged_gym.envs.base.legged_robot_config import (
     LeggedRobotCfgPPO,
 )
 
-
 class L5A_2WHEEL_Cfg(LeggedRobotCfg):
     class env(LeggedRobotCfg.env):
         num_actions = 8 # 每个环境中机器人的动作空间维度,通常对应于机器人的关节数量
-        num_observations = 3 + 3 + 4 + 6 + num_actions*2  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
+        num_observations = 3 + 3 + 4 + 6 + num_actions*2 + 4  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
         num_privileged_obs = 3 + num_observations + 7 * 11# 特权观测,评论家网络输入
         obs_history_length = 10  # number of observations stacked together,状态观测历史堆叠的长度
         obs_history_dec = 1 # 状态历史堆叠的衰减参数,当前时刻权重最高,这里设置为1说明没有衰减
@@ -65,12 +64,13 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             height = [0.645, 0.645]     # 高度范围上下浮动3cm
             heading = [-3.14, 3.14]     # 朝向范围
             mode_normalization = [0, 1] # 模式归一化,暂时两个模式-步态占比0.8,两轮平衡占比0.2
-        gait_train_proportion = 0.8     # 训练步态的环境占比
-        gait_foot_height = 0.207
+
+    class gait:
+        gait_train_proportion = 0.5     # 训练步态的环境占比
+        stage_names = ["stand", "gait", "recover"]
         gait_period = 0.5 
 
     class init_state(LeggedRobotCfg.init_state):
-
         pos = [0.0, 0.0, 0.645 + 0.05]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
         rot = [0.0, 0.0, 0.0, 1.0]  # x,y,z,w [quat],base初始姿态
         lin_vel = [0.0, 0.0, 0.0]  # x,y,z [m/s]
@@ -91,13 +91,11 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         action_scale_pos = 0.25
         # 速度动作的缩放系数
         action_scale_vel = 0.5
-
         # PD控制器参数:
         # 各关节的刚度系数
         stiffness = {"hip_roll": 40, "hip_pitch": 40, "knee": 80, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 2, "wheel": 1.5}  # [N*m*s/rad]
-
+        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 2, "wheel": 0.8}  # [N*m*s/rad]
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 2
 
@@ -116,7 +114,6 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         terminate_after_contacts_on = ["base"] # 终止区域
         self_collisions = 1  # 1 to disable, 0 to enable...bitwise filter,控制机器人自身各部分之间是否能够发生碰撞检测
         flip_visual_attachments = False # 设置是否反转视觉附件
-        # stage_names = ["stand", "gait", "recover"]
 
     class normalization(LeggedRobotCfg.normalization):
         class obs_scales: # 观测值缩放因子,将观测值缩放到统一维度,先给零观测值,把这些变量先读出来,然后缩放到正负1范围内
@@ -152,16 +149,22 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
 
             # tracking related rewards
             tracking_lin_vel_x = 4.0
-            # tracking_lin_vel_y = 1.0
+            tracking_lin_vel_y = 1.0
             tracking_ang_vel = 2.0
             tracking_lin_vel_pb = 1.0
             tracking_ang_vel_pb = 0.2
 
+            # task related rewards
+            contact_number = 10
+            feet_clearance = -20
+            # contact_no_vel = -5
+            # wheel_zero_vel = 10
+
             # regulation related rewards
-            nominal_foot_position = 4.0
+            # nominal_foot_position = 4.0
             leg_symmetry = 0.5
-            same_foot_x_position = -50 # 0.5
-            same_foot_z_position = -100
+            same_foot_x_position = -2 # -50
+            # same_foot_z_position = -100
             lin_vel_z = -0.3
             ang_vel_xy = -0.3
             torques = -0.00016
@@ -182,7 +185,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         foot_x_position_sigma = 0.001
         height_tracking_sigma = 0.01
         base_height_target = 0.645
-        feet_height_target = 0.10
+        feet_height_target = 0.08
         min_feet_distance = 0.27
         max_feet_distance = 0.30
         max_contact_force = 100.0  # forces above this value are penalized

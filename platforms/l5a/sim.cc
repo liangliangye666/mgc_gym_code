@@ -57,7 +57,7 @@ void MyController(const mjModel* m, mjData* d) {
   robot_model.UpdateMujocoJointStates(m, d);
   robot_model.UpdateModel();
   static l5a::FSM fsm(robot_model);
-  robot_model.vel_x_des_ = -0.0;
+  robot_model.vel_x_des_ = 0.8;
   robot_model.vel_y_des_ = -0.0;
   robot_model.omega_des_ = 0.0;
   static double count_num = 0;

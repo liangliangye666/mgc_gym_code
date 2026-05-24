@@ -178,7 +178,7 @@ class OnPolicyRunner:
             if it % self.save_interval == 0: # 定期保存模型
                 self.save(os.path.join(self.log_dir, "model_{}.pt".format(it)))
             ep_infos.clear() # 清空回合信息
-            # 更新当前迭代计数
+            self.env.total_learning_iteration += 1                      # 更新当前迭代计数
         self.current_learning_iteration = num_learning_iterations
         self.save(  # 保存最终模型
             os.path.join(self.log_dir, "model_{}.pt".format(num_learning_iterations))
