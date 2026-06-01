@@ -41,10 +41,10 @@ import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor
 
 
 class cmd:
-    vel_x = -0.0
+    vel_x = 0.6
     vel_y = 0.0
     vel_yaw = 0.0
-    height = 0.6464
+    height = 0.645
     heading = 0
 
 
@@ -204,52 +204,48 @@ def run_mujoco(policy, cfg):
         # right_hip_joint right_knee_joint rf_wheel_joint rb_wheel_joint
         # left_hip_joint left_knee_joint lf_wheel_joint lb_wheel_joint
         q = q[-cfg.env.num_actions :] # q和dq都取后面6个关节相关的值
-        print("q:", q)
+        # print("q:", q)
         dq = dq[-cfg.env.num_actions :]
 
         # 1000hz -> 100hz
-        # if count_lowlevel % cfg.sim_config.decimation == 0:
+        if count_lowlevel % cfg.sim_config.decimation == 0:
 
-        obs = np.zeros([1, cfg.env.num_observations + 3], dtype=np.float32) # 观测值数量42 + 3
-        # eu_ang = quaternion_to_euler_array(quat)
-        # eu_ang[eu_ang > math.pi] -= 2 * math.pi
+            obs = np.zeros([1, cfg.env.num_observations + 3], dtype=np.float32) # 观测值数量42 + 3
+            # eu_ang = quaternion_to_euler_array(quat)
+            # eu_ang[eu_ang > math.pi] -= 2 * math.pi
 
-        # 缩放到近似相同的范围内
-        # obs[0, 0:3] = v * cfg.normalization.obs_scales.lin_vel
-        obs[0, 0:3] = omega * cfg.normalization.obs_scales.ang_vel
-        obs[0, 3:7] = base_quat_local * cfg.normalization.obs_scales.quat
-        
-        obs[0, 7] = cmd.vel_x * cfg.normalization.obs_scales.lin_vel
-        obs[0, 8] = cmd.vel_y * cfg.normalization.obs_scales.lin_vel_y
-        obs[0, 9] = cmd.vel_yaw * cfg.normalization.obs_scales.ang_vel
-        obs[0, 10] = cmd.height * cfg.normalization.obs_scales.height_measurements
+            # 缩放到近似相同的范围内
+            # obs[0, 0:3] = v * cfg.normalization.obs_scales.lin_vel
+            obs[0, 0:3] = omega * cfg.normalization.obs_scales.ang_vel
+            obs[0, 3:6] = gvec
+            
+            obs[0, 6] = cmd.vel_x * cfg.normalization.obs_scales.lin_vel
+            obs[0, 7] = cmd.vel_y * cfg.normalization.obs_scales.lin_vel_y
+            obs[0, 8] = cmd.vel_yaw * cfg.normalization.obs_scales.ang_vel
+            obs[0, 9] = cmd.height * cfg.normalization.obs_scales.height_measurements
 
-        obs[0, 11:14] = q[:3] * cfg.normalization.obs_scales.dof_pos
-        obs[0, 14:17] = q[4:7] * cfg.normalization.obs_scales.dof_pos
-        obs[0, 17:25] = dq * cfg.normalization.obs_scales.dof_vel
-        obs[0, 25:33] = action
-        obs[0, 33] = gait_enable
-        obs[0, 34] = np.sin(2 * np.pi * phase) * gait_enable
-        obs[0, 35] = np.cos(2 * np.pi * phase) * gait_enable
-        obs[0, 36] = 0
+            obs[0, 10:16] = (q[cfg.asset.joint_indices] - default_q[cfg.asset.joint_indices]) * cfg.normalization.obs_scales.dof_pos
+            obs[0, 16:24] = dq * cfg.normalization.obs_scales.dof_vel
+            obs[0, 24:32] = action
+            # obs[0, 32] = gait_enable
+            # obs[0, 33] = np.sin(2 * np.pi * phase) * gait_enable
+            # obs[0, 34] = np.cos(2 * np.pi * phase) * gait_enable
+            # obs[0, 35] = 1
 
-        obs[0,37]=v[0]
-        obs[0,38]=v[1]
-        obs[0,39]=v[2]
-        # obs[0,34:37]=base_euler_zyx
+            obs[0,-3:]=v * cfg.normalization.obs_scales.lin_vel
 
-        obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
+            obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
 
-        policy_input = np.zeros([1, cfg.env.num_observations + 3], dtype=np.float32)
+            policy_input = np.zeros([1, cfg.env.num_observations + 3], dtype=np.float32)
 
-        policy_input = obs
-        # print("policy_input: ", policy_input)
-        # left_hip_joint left_knee_joint fl_wheel_joint rl_wheel_joint
-        # right_hip_joint right_knee_joint fr_wheel_joint rr_wheel_joint
+            policy_input = obs
+            # print("policy_input: ", policy_input)
+            # left_hip_joint left_knee_joint fl_wheel_joint rl_wheel_joint
+            # right_hip_joint right_knee_joint fr_wheel_joint rr_wheel_joint
 
-        action[:] = policy(torch.tensor(policy_input, dtype=torch.float32))[0].detach().numpy()
-        action = np.clip(action, -cfg.normalization.clip_actions, cfg.normalization.clip_actions)
-        # print("action:", action)
+            action[:] = policy(torch.tensor(policy_input, dtype=torch.float32))[0].detach().numpy()
+            action = np.clip(action, -cfg.normalization.clip_actions, cfg.normalization.clip_actions)
+            # print("action:", action)
 
         target_q[[0, 1, 2, 4, 5, 6]] = action[[0, 1, 2, 4, 5, 6]] * cfg.control.action_scale_pos
         target_dq[[3, 7]] = action[[3, 7]] * cfg.control.action_scale_vel
@@ -292,8 +288,8 @@ if __name__ == "__main__":
         class robot_config:
             # kps = np.array([30, 50, 50, 0, 30, 50, 50, 0], dtype=np.double)
             # kds = np.array([3, 5, 5, 5, 3, 5, 5, 5], dtype=np.double)
-            kps = np.array([10, 10, 20, 0, 10, 10, 20, 0], dtype=np.double)
-            kds = np.array([4, 4, 4, 2, 4, 4, 4, 2], dtype=np.double)
+            kps = np.array([40, 40, 80, 0, 40, 40, 80, 0], dtype=np.double)
+            kds = np.array([2, 2, 2, 0.8, 2, 2, 2, 1.5], dtype=np.double)
             # tau_limit = np.array([300, 300, 60, 60, 300, 300, 60, 60], dtype=np.double)
             tau_limit = np.array([745, 745, 460, 400, 745, 745, 460, 400], dtype=np.double)
             # tau_limit = 800.0 * np.ones(8, dtype=np.double)  # 力矩限制

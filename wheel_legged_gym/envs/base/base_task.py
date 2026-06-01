@@ -63,6 +63,7 @@ class BaseTask:
         self.num_privileged_obs = cfg.env.num_privileged_obs # 特权观测维度
         self.num_actions = cfg.env.num_actions # 动作空间维度
         self.obs_history_length = cfg.env.obs_history_length # 历史观测堆叠长度
+        self.num_commands = cfg.commands.num_commands # 命令个数
 
         # optimization flags for pytorch JIT,禁用表示不预热模型,避免前几次延迟(可能几百ms)
         torch._C._jit_set_profiling_mode(False)
@@ -72,6 +73,16 @@ class BaseTask:
         self.obs_buf = torch.zeros( # 初始化观测值缓存,维度(num_envs,num_obs),存储在gpu上
             self.num_envs, self.num_obs, device=self.device, dtype=torch.float
         )
+        if self.num_privileged_obs is not None: # 初始化特权观测缓存,维度(num_envs,num_privileged_obs)
+            self.privileged_obs_buf = torch.zeros(
+                self.num_envs,
+                self.num_privileged_obs,
+                device=self.device,
+                dtype=torch.float,
+            )
+        else:
+            self.privileged_obs_buf = None
+            # self.num_privileged_obs = self.num_obs
         self.obs_history = torch.zeros( # 初始化历史观测缓存,维度(num_envs,num_obs*obs_history_length),存储在gpu上,样式:([0,0,0,0,0,0],[0,0,0,0,0,0])->两个环境,3个观测*2个历史长度
             self.num_envs,
             self.num_obs * self.obs_history_length,
@@ -93,17 +104,6 @@ class BaseTask:
         self.edge_reset_buf = torch.zeros( # 初始化边缘超限重置缓存,维度(num_envs,),用于环境重置
             self.num_envs, device=self.device, dtype=torch.bool
         )
-        if self.num_privileged_obs is not None: # 初始化特权观测缓存,维度(num_envs,num_privileged_obs)
-            self.privileged_obs_buf = torch.zeros(
-                self.num_envs,
-                self.num_privileged_obs,
-                device=self.device,
-                dtype=torch.float,
-            )
-        else:
-            self.privileged_obs_buf = None
-            # self.num_privileged_obs = self.num_obs
-
         self.extras = {} # 获取额外信息
 
         # create envs, sim and viewer
