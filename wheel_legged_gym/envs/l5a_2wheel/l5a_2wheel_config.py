@@ -96,7 +96,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         # 各关节的刚度系数
         stiffness = {"hip_roll": 40, "hip_pitch": 40, "knee": 80, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 2, "wheel": 0.8}  # [N*m*s/rad]
+        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 2, "wheel": 1.5}  # [N*m*s/rad]
 
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 2
@@ -151,7 +151,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
 
             # tracking related rewards
-            tracking_lin_vel = 4.0
+            tracking_lin_vel_x = 4.0
             # tracking_lin_vel_y = 1.0
             tracking_ang_vel = 2.0
             tracking_lin_vel_pb = 1.0
@@ -183,8 +183,8 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         height_tracking_sigma = 0.01
         base_height_target = 0.645
         feet_height_target = 0.10
-        min_feet_distance = 0.32
-        max_feet_distance = 0.35
+        min_feet_distance = 0.27
+        max_feet_distance = 0.30
         max_contact_force = 100.0  # forces above this value are penalized
         # kappa_gait_probs = 0.05
         # gait_force_sigma = 25.0

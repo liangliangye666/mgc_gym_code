@@ -148,8 +148,8 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
 
             # tracking related rewards
-            tracking_lin_vel = 4.0
-            # tracking_lin_vel_y = 1.0
+            tracking_lin_vel_x = 4.0
+            tracking_lin_vel_y = 1.0
             tracking_ang_vel = 2.0
             tracking_lin_vel_pb = 1.0
             tracking_ang_vel_pb = 0.2
@@ -186,8 +186,8 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         height_tracking_sigma = 0.01
         base_height_target = 0.645
         feet_height_target = 0.08
-        min_feet_distance = 0.28
-        max_feet_distance = 0.31
+        min_feet_distance = 0.27
+        max_feet_distance = 0.30
         max_contact_force = 100.0  # forces above this value are penalized
         # kappa_gait_probs = 0.05
         # gait_force_sigma = 25.0

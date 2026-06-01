@@ -37,6 +37,7 @@ from collections import deque # 导入双端队列数据结构,高效存储历�
 from scipy.spatial.transform import Rotation as R # 导入SciPy旋转变换工具,处理3D旋转问题(四元数/欧拉角/旋转矩阵转换)
 from wheel_legged_gym import WHEEL_LEGGED_GYM_ROOT_DIR # 导入自定义路径常量
 from wheel_legged_gym.envs import L5A_2WHEEL_Cfg # 导入机器人环境配置类作为父类
+from wheel_legged_gym.envs import robot_type
 import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor-Critic架构),自动求导训练强化学习模型,GPU加速仿真数据处理(如状态特征提取)
 
 
@@ -227,10 +228,11 @@ def run_mujoco(policy, cfg):
             obs[0, 10:16] = (q[cfg.asset.joint_indices] - default_q[cfg.asset.joint_indices]) * cfg.normalization.obs_scales.dof_pos
             obs[0, 16:24] = dq * cfg.normalization.obs_scales.dof_vel
             obs[0, 24:32] = action
-            # obs[0, 32] = gait_enable
-            # obs[0, 33] = np.sin(2 * np.pi * phase) * gait_enable
-            # obs[0, 34] = np.cos(2 * np.pi * phase) * gait_enable
-            # obs[0, 35] = 1
+            if robot_type == "l5a_2wheel_gait":
+                obs[0, 32] = gait_enable
+                obs[0, 33] = np.sin(2 * np.pi * phase) * gait_enable
+                obs[0, 34] = np.cos(2 * np.pi * phase) * gait_enable
+                obs[0, 35] = 1
 
             obs[0,-3:]=v * cfg.normalization.obs_scales.lin_vel
 
@@ -289,7 +291,7 @@ if __name__ == "__main__":
             # kps = np.array([30, 50, 50, 0, 30, 50, 50, 0], dtype=np.double)
             # kds = np.array([3, 5, 5, 5, 3, 5, 5, 5], dtype=np.double)
             kps = np.array([40, 40, 80, 0, 40, 40, 80, 0], dtype=np.double)
-            kds = np.array([2, 2, 2, 0.8, 2, 2, 2, 1.5], dtype=np.double)
+            kds = np.array([2, 2, 2, 1.5, 2, 2, 2, 1.5], dtype=np.double)
             # tau_limit = np.array([300, 300, 60, 60, 300, 300, 60, 60], dtype=np.double)
             tau_limit = np.array([745, 745, 460, 400, 745, 745, 460, 400], dtype=np.double)
             # tau_limit = 800.0 * np.ones(8, dtype=np.double)  # 力矩限制

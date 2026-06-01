@@ -496,13 +496,18 @@ class L5A_2WHEEL(LeggedRobot):
         out_of_limits += (self.dof_pos - self.dof_pos_limits[:, 1]).clip(min=0.0)
         return torch.sum(out_of_limits, dim=1)
 
-    def _reward_tracking_lin_vel(self):
+    def _reward_tracking_lin_vel_x(self):
         # Tracking of linear velocity commands (xy axes)
-        lin_vel_error = torch.sum(torch.square(self.commands[:, :2] - self.base_lin_vel[:, :2]), dim=1)
+        lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0])
+        return torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
+    
+    def _reward_tracking_lin_vel_y(self):
+        # Tracking of linear velocity commands (xy axes)
+        lin_vel_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1])
         return torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
 
     def _reward_tracking_lin_vel_pb(self):
-        delta_phi = ~self.reset_buf * (self._reward_tracking_lin_vel() - self.rwd_linVelTrackPrev)
+        delta_phi = ~self.reset_buf * (self._reward_tracking_lin_vel_x() - self.rwd_linVelTrackPrev)
         # return ang_vel_error
         return delta_phi / self.dt
 

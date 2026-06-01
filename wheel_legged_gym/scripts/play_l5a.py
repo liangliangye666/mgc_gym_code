@@ -50,7 +50,10 @@ def play(args):
     env_cfg.env.fail_to_terminal_time_s = 1
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 20)
     env_cfg.commands.resampling_time = 1000  # 重采样间隔 （s）
-    env_cfg.terrain.mesh_type = "trimesh"
+    if robot_type == "l5a_2wheel_upstairs":
+        env_cfg.terrain.mesh_type = "trimesh"
+    else:
+        env_cfg.terrain.mesh_type = "plane"
     env_cfg.terrain.num_rows = 10
     env_cfg.terrain.num_cols = 10
     env_cfg.terrain.max_init_terrain_level = env_cfg.terrain.num_rows - 1

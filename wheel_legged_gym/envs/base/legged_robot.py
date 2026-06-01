@@ -847,7 +847,7 @@ class LeggedRobot(BaseTask):
 
         if self.cfg.env.num_privileged_obs is not None:
             self.privileged_obs_buf = self.compute_privileged_observations()
-
+            
         # add noise if needed
         if self.add_noise:
             self.obs_buf += (2 * torch.rand_like(self.obs_buf) - 1) * self.noise_scale_vec
@@ -967,8 +967,7 @@ class LeggedRobot(BaseTask):
             0,
             1,
         )
-        # height = self._get_foot_heights()
-        # print("foot_heights:", height[0])
+        # print("foot_position:", self.foot_positions[0, :, 2])
 
     def post_physics_step(self):
         """check terminations, compute observations and rewards
@@ -1527,8 +1526,6 @@ class LeggedRobot(BaseTask):
         return torch.sum(
             torch.norm(
                 self.contact_forces[:, self.penalised_contact_indices, :], dim=-1) > 1.0, dim=1)
-
-
 
 
 
