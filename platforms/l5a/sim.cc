@@ -26,6 +26,7 @@
 #include <new>
 #include <string>
 #include <thread>
+#include <fstream>
 
 #include <mujoco/mujoco.h>
 #include <unistd.h>
@@ -48,25 +49,27 @@ extern "C" {
 #  include <unistd.h>
 #endif
 }
-
-std::string urdf_path = "/sim/model/l5a/urdf/l5aurdf20260420.urdf";
-std::string xml_path = "/sim/model/l5a/xml/l5aurdf20260420.xml";
+std::ofstream logfile;
+std::string urdf_path = "/sim/model/l5a/urdf/l5aurdf20260521.urdf";
+std::string xml_path = "/sim/model/l5a/xml/l5aurdf20260521.xml";
 
 void MyController(const mjModel* m, mjData* d) {
   static l5a::RobotModel robot_model(urdf_path);
   robot_model.UpdateMujocoJointStates(m, d);
   robot_model.UpdateModel();
   static l5a::FSM fsm(robot_model);
-  robot_model.vel_x_des_ = 0.8;
+  robot_model.vel_x_des_ = 0.0;
   robot_model.vel_y_des_ = -0.0;
-  robot_model.omega_des_ = 0.3;
+  robot_model.omega_des_ = 0.0;
   static double count_num = 0;
   static double count_num_plus = 0;
-  if(count_num > 2000 && count_num <= 10000){
-    robot_model.gait_enable_ = true;
-    robot_model.phase_ = std::fmod(count_num_plus * 0.005, 0.5) / 0.5;
+  if(count_num > 2000 && count_num <= 8000){
+    robot_model.vel_x_des_ = 0.5;
+    robot_model.gait_enable_ = false;
+    robot_model.phase_ = std::fmod(count_num_plus * 0.002, 0.8) / 0.8;
     count_num_plus++;
-  }else if(count_num > 10000){
+  }else if(count_num > 8000){
+    robot_model.vel_x_des_ = -0.02;
     robot_model.gait_enable_ = false;
     robot_model.phase_ = 0;
     count_num_plus = 0;
@@ -101,6 +104,10 @@ void MyController(const mjModel* m, mjData* d) {
     d->ctrl[i] = tau_cmd[i];
     // d->ctrl[i] = tau_pure_ff[i];    // for rl pd paras selection
   }
+  // logfile << "t, vel_des, vel_act, w_des, w_act, zero, roll, pitch, height_target, height\n";
+  logfile << d->time << "," << robot_model.vel_x_des_ << "," << robot_model.qdot[0] << "," << robot_model.omega_des_ << "," << robot_model.qdot[5] << "," << 0 << "," << robot_model.q_rpy[3] << "," 
+  << robot_model.q_rpy[4] << "," << 0.643 << "," << robot_model.q_rpy[2] << "\n";
+
 }
 
 namespace {
@@ -617,7 +624,8 @@ int main(int argc, char** argv) {
 
   signal(SIGINT, exit_handler);
   signal(SIGTERM, exit_handler);
-
+  logfile.open("log.csv");
+  logfile << "t, vel_des, vel_act, w_des, w_act, zero, roll, pitch, height_target, height\n";
   MujocoSimulator(argc, argv);
 
   return 0;

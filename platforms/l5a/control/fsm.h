@@ -31,6 +31,7 @@ class FSM {
   bool CheckSafety(RobotModel& robot_model);
   Eigen::VectorXd tau() { return tau_; }
   Eigen::VectorXd pos() { return pos_; }
+  Eigen::VectorXd vel() { return vel_; }
   Eigen::VectorXd pos_fb_kp_;
   Eigen::VectorXd pos_fb_kd_;
 
@@ -50,6 +51,7 @@ class FSM {
 
   Eigen::VectorXd tau_; //力矩命令
   Eigen::VectorXd pos_; //位置命令
+  Eigen::VectorXd vel_;
 };
 
 }  // namespace l5a

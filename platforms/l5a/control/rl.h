@@ -34,6 +34,7 @@ class RL {
   void RunEDamp(RobotModel& robot_model);
   Eigen::VectorXd tau() { return tau_; };
   Eigen::VectorXd pos_target() { return pos_target_; };
+  Eigen::VectorXd vel_target() { return vel_target_; };
   Eigen::VectorXd pos_fb_kp_, pos_fb_kd_;
  private:
   void LoadParameters();

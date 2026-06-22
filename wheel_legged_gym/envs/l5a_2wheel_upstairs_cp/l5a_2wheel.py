@@ -98,6 +98,7 @@ class L5A_2WHEEL(LeggedRobot):
         self.cur_goal_idx[env_ids] = 0
         self.reach_goal_timer[env_ids] = 0
         self._update_goals()
+        self._update_env_step_heights(env_ids)
 
         # reset robot states
         self._reset_dofs(env_ids) # 重置关节状态
@@ -129,6 +130,7 @@ class L5A_2WHEEL(LeggedRobot):
         self.stance_mask[env_ids] = 1.0                         # 两条腿都重置为支撑腿
         self.in_double_support[env_ids] = True                        # 双支撑
         self.ds_time[env_ids] = 0.0                                # 双支撑时间
+        self.swing_check_time[env_ids] = 0.0
 
         # fill extras
         self.extras["episode"] = {} # 创建一个空字典用于存储当前回合的统计信息
@@ -173,6 +175,13 @@ class L5A_2WHEEL(LeggedRobot):
         """
         clip_actions = self.cfg.normalization.clip_actions
         self.actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
+        # self.actions = torch.zeros( # 初始化动作张量
+        #     self.num_envs,
+        #     self.num_actions,
+        #     dtype=torch.float,
+        #     device=self.device,
+        #     requires_grad=False,
+        # )
         # step physics and render each frame
         self.render()
         self.pre_physics_step()
@@ -297,19 +306,25 @@ class L5A_2WHEEL(LeggedRobot):
             env_ids (List[int]): Environments ids for which new commands are needed
         """
         # old_cmd = self.commands.clone()               # 拷贝旧命令
-        self.commands[env_ids, 0] = (
+        cmd_vel_x = (
             self.command_ranges["lin_vel_x"][env_ids, 1]
             - self.command_ranges["lin_vel_x"][env_ids, 0]
         ) * torch.rand(len(env_ids), device=self.device) + self.command_ranges[
             "lin_vel_x"
         ][env_ids, 0]
+        cmd_vel_x[torch.abs(cmd_vel_x) < 0.1] = 0.0
+        self.commands[env_ids, 0] = cmd_vel_x
+        high_env_mask = self.env_step_height[env_ids] > 0.1
+        cmd_vel_x[high_env_mask] = torch.abs(cmd_vel_x[high_env_mask]) # 台阶高度大于10，那么只给向前的命令
 
-        self.commands[env_ids, 1] = (
+        cmd_vel_y = (
             self.command_ranges["lin_vel_y"][env_ids, 1]
             - self.command_ranges["lin_vel_y"][env_ids, 0]
         ) * torch.rand(len(env_ids), device=self.device) + self.command_ranges[
             "lin_vel_y"
         ][env_ids, 0]
+        cmd_vel_y[torch.abs(cmd_vel_y) < 0.1] = 0.0
+        self.commands[env_ids, 1] = cmd_vel_y
 
         self.commands[env_ids, 3] = (
             self.command_ranges["height"][env_ids, 1]
@@ -380,12 +395,13 @@ class L5A_2WHEEL(LeggedRobot):
         self.has_swing = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.in_double_support = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)                        # 双支撑
         self.ds_time = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)                                # 双支撑时间
+        self.swing_check_time = torch.zeros(self.num_envs, dtype=torch.float, device=self.device,)
 
     def _get_swing_stance_mask(self):
         # ===== 1. 接触检测 =====
         force_xy = torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2)
         # print("contact_force:", force_xy[0])
-        contact = force_xy > 30.0
+        contact = force_xy > 20.0
         stable = (self.contact_history.sum(dim=2) >= 2)     # 稳定接触（推荐 >=2 更鲁棒）
         need_swing = contact.sum(dim=1) > 0                 # 是否需要抬腿（平地不抬）
         # ===== 2. 选候选腿 =====
@@ -399,11 +415,11 @@ class L5A_2WHEEL(LeggedRobot):
             candidate[mask] = torch.argmax(stable[mask].float(), dim=1)
 
         # ===== 3. swing状态机 =====
-        swing_duration = 0.3                                # 摆动周期
-        ds_duration = 0.15                                   # 双支撑时间
+        swing_duration = 0.2                                # 摆动周期
+        ds_duration = 0.1                                   # 双支撑时间
         in_ds = self.in_double_support
         self.ds_time[in_ds] += self.dt
-        ds_finished = in_ds & (self.ds_time > ds_duration) & need_swing     # 双支撑结束,开始摆动
+        ds_finished = in_ds & (self.ds_time >= ds_duration) & need_swing     # 双支撑结束,开始摆动
         if ds_finished.any():
             self.current_swing[ds_finished] = candidate[ds_finished]        # 当前摆动腿索引
             self.has_swing[ds_finished] = True                              # 有摆动腿的环境
@@ -413,7 +429,7 @@ class L5A_2WHEEL(LeggedRobot):
         
         in_swing = self.has_swing                                           # 有摆动腿的环境
         self.swing_time[in_swing] += self.dt                                # 摆动时间增加
-        swing_finished = in_swing &  (self.swing_time > swing_duration)     # 摆动结束,开始双支撑
+        swing_finished = in_swing &  (self.swing_time >= swing_duration)     # 摆动结束,开始双支撑
         if swing_finished.any():
             self.has_swing[swing_finished] = False                          # 摆动结束
             self.in_double_support[swing_finished] = True                   # 进入双支撑状态
@@ -426,9 +442,58 @@ class L5A_2WHEEL(LeggedRobot):
         self.stance_mask = 1.0 - self.swing_mask
         self.stance_mask[self.in_double_support] = 1.0
 
+    # def _get_swing_stance_mask(self):
+    #     # ===== 1. 接触检测 =====
+    #     force_xy = torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2)
+    #     contact = force_xy > 20.0
+    #     stable = self.contact_history.sum(dim=2) >= 2
+    #     need_swing = contact.sum(dim=1) > 0
+    #     # ===== 2. 选候选腿：逻辑保持不变 =====
+    #     candidate = torch.argmax(force_xy, dim=1)           # 默认选水平接触力大的腿
+    #     one_contact = contact.sum(dim=1) == 1
+    #     if one_contact.any():
+    #         candidate[one_contact] = torch.argmax(contact[one_contact].float(), dim=1,)
+    #     one_stable = stable.sum(dim=1) == 1
+    #     mask = (contact.sum(dim=1) == 2) & one_stable
+    #     if mask.any():
+    #         candidate[mask] = torch.argmax(stable[mask].float(), dim=1,)
+
+    #     # ===== 3. 摆动状态机：无双支撑，每 0.1s 检测一次 =====
+    #     check_interval = 0.05
+    #     swing_duration = 0.2
+
+    #     not_swing = ~self.has_swing
+    #     self.swing_check_time[not_swing] += self.dt
+
+    #     check_ready = not_swing & (self.swing_check_time >= check_interval)
+    #     start_swing = check_ready & need_swing
+
+    #     if start_swing.any():
+    #         self.current_swing[start_swing] = candidate[start_swing]
+    #         self.has_swing[start_swing] = True
+    #         self.swing_time[start_swing] = 0.0
+
+    #     # 每次到检测周期都清零；即使没触发，也等下一个 0.1s 再检测
+    #     if check_ready.any():
+    #         self.swing_check_time[check_ready] = 0.0
+
+    #     in_swing = self.has_swing
+    #     self.swing_time[in_swing] += self.dt
+
+    #     swing_finished = in_swing & (self.swing_time >= swing_duration)
+    #     if swing_finished.any():
+    #         self.has_swing[swing_finished] = False
+    #         self.swing_time[swing_finished] = 0.0
+    #         self.swing_check_time[swing_finished] = 0.0
+
+    #     # ===== 4. 输出 =====
+    #     self.swing_mask.zero_()
+    #     self.swing_mask[torch.arange(self.num_envs), self.current_swing] = self.has_swing.float()
+    #     self.stance_mask = 1.0 - self.swing_mask
+
     def _update_contact_history(self):
         force_xy = torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2)
-        contact = (force_xy > 30.0).float()
+        contact = (force_xy > 20.0).float()
         # 滑动窗口
         self.contact_history = torch.roll(self.contact_history, shifts=-1, dims=2)
         self.contact_history[:, :, -1] = contact
@@ -437,8 +502,11 @@ class L5A_2WHEEL(LeggedRobot):
         super().post_physics_step()
         # # 更新控制状态机所在阶段
         self._update_goals()
-        self._update_contact_history()
-        self._get_swing_stance_mask()
+
+    def _update_env_step_heights(self, env_ids=None):
+        if env_ids is None:
+            env_ids = torch.arange(self.num_envs, device=self.device)
+        self.env_step_height[env_ids] = self.terrain_step_height[self.terrain_levels[env_ids], self.terrain_types[env_ids]]
 
     def _update_env_goals(self, env_ids=None):
         if env_ids is None:
@@ -579,7 +647,7 @@ class L5A_2WHEEL(LeggedRobot):
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw)
-        ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2]) / 0.1
+        ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
         return torch.exp(-ang_vel_error / self.cfg.rewards.ang_tracking_sigma)
 
     def _reward_tracking_ang_vel_pb(self):
@@ -602,12 +670,15 @@ class L5A_2WHEEL(LeggedRobot):
         direction_norm = torch.norm(direction, dim=-1, keepdim=True) + 1e-6
         direction = direction / direction_norm
         vel = self.root_states[:, 7:9]
-        progress = self.total_learning_iteration / 10000
+        cmd = self.commands[:, 0]
+        sign = torch.sign(cmd)
+        progress = self.total_learning_iteration / 20000
         decay = max(1.0-progress, 0.0)
-        rew = torch.sum(vel * direction, dim=-1) * decay
-        # print("rew:", rew[0])
+        rew = sign * torch.sum(vel * direction, dim=-1) * decay
+        # cmd_no_zero = (torch.abs(self.commands[:, 0]) > 1e-3).float()
+        # print("rew:", sign[0] * torch.sum(vel * direction, dim=-1)[0])
         return rew
-    
+
     def _reward_feet_air_time(self):
         # Reward long steps
         # Need to filter the contacts because the contact reporting of PhysX is unreliable on meshes
@@ -624,40 +695,72 @@ class L5A_2WHEEL(LeggedRobot):
         return rew_airTime
     
     def _reward_wheel_all_air(self):
-        wheel_air = self.contact_forces[:, self.feet_indices, 2] < 5.
+        wheel_air = self.contact_forces[:, self.feet_indices, 2] < 1.
         wheel_all_air = torch.all(wheel_air, dim=1)
         return wheel_all_air
     
-    def _reward_feet_contact_number(self): 
-        fz = self.contact_forces[:, self.feet_indices, 2]                   # 接触力z,维度[N, 2]
-        contact = (fz > 1.0).float()                                        # 是否接触
-        rew_stance = self.stance_mask * contact - 1.3*self.stance_mask * (1-contact) # 支撑腿接触,摆动腿不接触
-        rew_swing = self.swing_mask * (1-contact) - 1.3*self.swing_mask * contact # 支撑腿接触,摆动腿不接触
-        rew_contact = 0.01 * rew_stance + 5 * rew_swing
-        # print("contact:", contact[0])
-        # print("stance:", self.stance_mask[0])
-        # print("swing:", self.swing_mask[0])
-        rew_gait = torch.sum(rew_contact, dim=1)                            # 步态奖励
-        return rew_gait
+    def _reward_feet_contact_number(self):
+        fz = self.contact_forces[:, self.feet_indices, 2]
+        contact_sigma = self.cfg.rewards.contact_force_sigma
+        soft_contact = 1.0 - torch.exp(-torch.clamp(fz, min=0.0) / contact_sigma)
+        target_height = torch.clamp(self.env_step_height.unsqueeze(1), min=0.02)
+        clearance = self.foot_heights
+        lift_ratio = torch.clamp(clearance / (target_height + 1e-6), 0.0, 1.0)
+        # Swing foot contact is bad mainly before it has lifted enough.
+        swing_contact_penalty = self.swing_mask * soft_contact
+        return torch.sum(swing_contact_penalty, dim=1)
+    
+    # def _reward_feet_clearance(self):
+    #     """
+    #     改进版：使用连续函数替代二值判断，提供更平滑的梯度。
+    #     """
+    #     foot_height = self.foot_positions[:, :, 2]
+    #     terrain_height = self._get_foot_heights()
+    #     clearance = foot_height - terrain_height - self.cfg.asset.wheel_radius
+    #     # print("foot_height:", foot_height[0])
+    #     # print("terrain_height:", terrain_height[0])
+    #     # print("clearance:", clearance[0])
+    #     h_min = 0.02
+    #     h_max = 0.05
+    #     inside = ((clearance > h_min) & (clearance < h_max)).float()
+    #     swing_mask = self.swing_mask  # (num_envs, 2)
+    #     # 3. 对所有腿的得分求和（鼓励所有摆动腿都达标）
+    #     total_reward = torch.sum(inside * swing_mask, dim=1)
+    #     # print("total_reward:", total_reward[0])
+    #     return total_reward
     
     def _reward_feet_clearance(self):
-        """
-        改进版：使用连续函数替代二值判断，提供更平滑的梯度。
-        """
         foot_height = self.foot_positions[:, :, 2]
         terrain_height = self._get_foot_heights()
-        clearance = foot_height - terrain_height - self.cfg.asset.wheel_radius
-        # print("foot_height:", foot_height[0])
-        # print("terrain_height:", terrain_height[0])
-        # print("clearance:", clearance[0])
-        foot_height_ref = 0.02
-        swing_mask = self.swing_mask  # (num_envs, 2)
-        # reward = 1 - torch.exp( -torch.square(foot_height - foot_height_ref) / 0.005)
-        reward = torch.square(clearance - foot_height_ref) / 0.005
-        # 3. 对所有腿的得分求和（鼓励所有摆动腿都达标）
-        total_reward = torch.sum(reward * swing_mask, dim=1)
-        # print("total_reward:", total_reward[0])
-        return total_reward
+        clearance = torch.clamp(
+            foot_height - terrain_height - self.cfg.asset.wheel_radius,
+            min=0.0,
+        )
+        swing_mask = self.swing_mask
+        # print("swing:", swing_mask[0])
+        # target_height = self.cfg.rewards.feet_height_target
+        target_height = self.env_step_height.unsqueeze(1)
+        sigma = self.cfg.rewards.feet_clearance_sigma
+        # print("step_height:", self.env_step_height[0])
+        # print("env:", self.terrain_levels[0], self.terrain_types[0])
+        height_error = torch.clamp(target_height - clearance, min=0.0)
+        penalty = 1.0 - torch.exp(-torch.square(height_error) / sigma)
+        h = penalty * swing_mask
+        # print("pen:", penalty[0])
+        # print("ans:", h[0])
+        ans = torch.sum(penalty * swing_mask, dim=1)
+        return ans
+    
+    def _reward_swing_foot_lift(self):
+        swing_mask = self.swing_mask
+        target_height = self.env_step_height.unsqueeze(1)
+        target_height = torch.clamp(target_height, min=0.03)
+        clearance = self.foot_heights
+        normalized_lift = torch.clamp(clearance / (target_height + 1e-6), 0.0, 1.0)
+        lift_reward = torch.sum(normalized_lift * swing_mask, dim=1)
+        progress = self.total_learning_iteration / 20000
+        decay = max(1.0-progress, 0.0)
+        return lift_reward * decay
     
     def _reward_wheel_zero_velocity(self):
         swing_mask = self.swing_mask
@@ -686,6 +789,7 @@ class L5A_2WHEEL(LeggedRobot):
         slip_penalty = torch.relu(slip_condition)
         # 对两个轮子求和
         total_slip = torch.sum(slip_penalty, dim=1)
+        # print("rew_wheel_spin:", total_slip[0])
         return total_slip
     
     def _reward_feet_contact_forces(self):
@@ -697,16 +801,39 @@ class L5A_2WHEEL(LeggedRobot):
         # self.contact_forces 形状: (num_envs, num_bodies, 3)
         # self.feet_indices 应该是包含左右足部索引的列表
         feet_z_forces = self.contact_forces[:, self.feet_indices, 2]  # Z轴力，形状: (num_envs, 2)
+        # print("contact:", self.contact_forces[0, self.feet_indices])
         # print("feet_z_forces:", feet_z_forces[0])
         # 设置最大允许力阈值（单位：牛顿）
         F_max = self.cfg.rewards.max_contact_force  # 例如50N，需要根据你的机器人调整
+        F_scale = self.cfg.rewards.contact_force_scale
         # 计算超出阈值的部分
         excess_force = torch.relu(feet_z_forces - F_max)  # relu等同于max(0, x)
+        normalized_excess = torch.clamp(excess_force / F_scale, 0.0, 2.0)
         # 对两个足部求和，然后乘以惩罚系数
-        penalty = torch.sum(excess_force, dim=1)  # 对两个足部求和
+        penalty = torch.sum(normalized_excess, dim=1)  # 对两个足部求和
         return penalty
 
     def _reward_hip_pos(self):
         hip_error = torch.sum(torch.square(self.dof_pos[:, [0,4]]), dim=1)
         rew_hip = hip_error
         return rew_hip
+    
+    def _reward_foot_landing_vel(self):
+        contacts = self.contact_forces[:, self.feet_indices, 2] > 1.0
+
+        down_vel = torch.clamp(-self.foot_velocities[:, :, 2], min=0.0)
+        # print("vel:", self.foot_velocities[0, :, 2])
+        time_to_contact = self.foot_heights / (down_vel + 1e-6)
+
+        about_to_land = (
+            (self.foot_heights < self.cfg.rewards.landing_height_threshold)
+            & (time_to_contact < self.cfg.rewards.landing_time_threshold)
+            & (~contacts)
+        )
+        excess_down_vel = torch.relu(
+            down_vel - self.cfg.rewards.safe_landing_vel
+        )
+        penalty = torch.square(excess_down_vel)
+        ans = torch.sum(penalty * about_to_land.float(), dim=1)
+        # print("ans:", ans[0])
+        return ans

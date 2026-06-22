@@ -64,6 +64,7 @@ void RobotModel::Initialize() {
   omega_des_ = 0;
   phase_ = 0;
   gait_enable_ = false;
+  emergency_ = false;
 
   R_HW = Eigen::Matrix3d::Identity();
   R_WH = Eigen::Matrix3d::Identity();
@@ -91,8 +92,8 @@ void RobotModel::UpdateMujocoJointStates(const mjModel* m, mjData* d) {
 
   // Update q_rpy
   for (size_t i = 0; i < 3; i++) {
-    // q_rpy[i] = mj_data_->qpos[i];
-    q_rpy[i] = 0;
+    q_rpy[i] = mj_data_->qpos[i];
+    // q_rpy[i] = 0;
   }
   q_rpy[3] = rpy_base[0];
   q_rpy[4] = rpy_base[1];

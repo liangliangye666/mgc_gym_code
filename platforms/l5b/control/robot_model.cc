@@ -26,7 +26,7 @@ RobotModel::RobotModel(std::string urdf_path) {
   pinocchio::urdf::buildModel(urdf_filename, pino_model_fixed_);
   pino_data_fixed_ = pinocchio::Data(pino_model_fixed_);
   joint_vel_est_ = std::make_unique<JointVelEstimator>(pino_model_.nv - 6, 0.005);
-  control_dt = 0.005;  // default control dt
+  control_dt = 0.002;  // default control dt
 
   observed_value = Eigen::VectorXd::Zero(81);
   Initialize();
@@ -157,7 +157,7 @@ void RobotModel::UpdateMujocoJointStates(const mjModel* m, mjData* d) {
 void RobotModel::UpdateRealJointStates(standmode_output_t* standmode_output, standmode_input_t* standmode_input) {
   standmode_output_ = standmode_output;
   standmode_input_ = standmode_input;
-  control_dt = 0.005;
+  control_dt = 0.002;
 
   ori_base_world_.euler << standmode_input_->IMU_signals.IMU_yaw, standmode_input_->IMU_signals.IMU_pitch, standmode_input_->IMU_signals.IMU_roll;
   ori_base_local_.omega << standmode_input_->IMU_signals.IMU_wx_body, standmode_input_->IMU_signals.IMU_wy_body, standmode_input_->IMU_signals.IMU_wz_body;

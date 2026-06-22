@@ -9,7 +9,7 @@
 
 int main(int argc, char** argv) {
   std::string workspacePath = std::getenv("PROJECT_ROOT_DIR");
-  std::string urdf_filename = workspacePath + "/sim/model/l5a/urdf/l5aurdf20260420.urdf";
+  std::string urdf_filename = workspacePath + "/sim/model/l5a/urdf/l5aurdf20260521.urdf";
   pinocchio::Model robot_model;
   pinocchio::JointModelFreeFlyer root_joint;
   pinocchio::urdf::buildModel(urdf_filename, root_joint, robot_model);
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     double angRoll = (3.0 / 180.0) * M_PI;
   // double angRoll = (0.0 / 180.0) * M_PI;
     double angHip = (15.0 / 180.0) * M_PI;
-    q << 0, 0, 0, 0, 0, 0, 0, angRoll, angHip, angKnee, 0, angRoll, angHip, angKnee, 0;
+    q << 0, 0, 0, 0, 0, 0, 0, angRoll, angHip, angKnee, 0, -angRoll, angHip, angKnee, 0;
 
     pinocchio::forwardKinematics(robot_model, robot_data, q);
     whlposL = robot_data.oMi[front_wheel_joint_l].translation();

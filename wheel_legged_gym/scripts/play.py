@@ -119,7 +119,7 @@ def play(args):
         else:
             actions = policy(obs.detach())
 
-        env.commands[:, 0] = 0.5  # lin_vel
+        env.commands[:, 0] = 0.8  # lin_vel
         env.commands[:, 1] = 0  # ang_vel
         env.commands[:, 2] = 0.53  # height
         env.commands[:, 3] = 1  # 0 是四轮 1 是两轮

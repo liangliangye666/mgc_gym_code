@@ -95,11 +95,18 @@ class LeggedRobot(BaseTask):
             name = self.reward_names[i]
             # 调用奖励函数并乘以相应的权重
             rew = self.reward_functions[i]() * self.reward_scales[name]
+            single_reward_clip = self.cfg.rewards.clip_single_reward
+            # if name in ["foot_landing_vel", "feet_contact_forces"]:
+            #     single_reward_clip = getattr(
+            #         self.cfg.rewards,
+            #         "clip_impact_reward",
+            #         self.cfg.rewards.clip_single_reward,
+            #     )
             # 裁剪奖励值，防止奖励值过大或过小, 单个奖励的最大值为5
             rew = torch.clip(
                 rew,
-                -self.cfg.rewards.clip_single_reward * self.dt,
-                self.cfg.rewards.clip_single_reward * self.dt,
+                -single_reward_clip * self.dt,
+                single_reward_clip * self.dt,
             )
             # 将裁剪后的奖励值加到奖励缓冲区中
             self.rew_buf += rew
@@ -147,12 +154,6 @@ class LeggedRobot(BaseTask):
         )
         # 如果接触力超过10N，则认为是失败
         fail_buf |= self.projected_gravity[:, 2] > -0.1
-        # print("base_contact", torch.any(
-        #     torch.norm(self.contact_forces[:, self.termination_contact_indices, :], dim=-1) > 10.0,
-        #     dim=1
-        # )[:5])
-        # print("gravity_z", self.projected_gravity[:5, 2])
-        # print("fail_buf", self.fail_buf[:5])
 
         # 如果投影重力z轴分量大于-0.1，则认为是失败（可能是因为机器人处于高高度且失去平衡）
         self.fail_buf *= fail_buf  # 如果已失败，则保持失败状态
@@ -167,6 +168,16 @@ class LeggedRobot(BaseTask):
             # 如果机器人在y轴方向超出最大y坐标，则重置
             self.edge_reset_buf |= self.base_position[:, 1] < self.terrain_y_min + 1
             # 如果机器人在y轴方向超出最小y坐标，则重置
+        # 到达最后一个goal附近则reset
+        # goal_reset_buf = torch.zeros_like(self.reset_buf, dtype=torch.bool)
+        # if  hasattr(self.cfg.terrain, "num_goals"):
+        #     final_goal_idx = self.cfg.terrain.num_goals - 1
+        #     final_goal_xy = self.env_goals[:, final_goal_idx, :2]
+        #     goal_dist = torch.norm(self.root_states[:, :2] - final_goal_xy, dim=1)
+        #     goal_reset_buf = goal_dist < 0.2
+        # self.reset_buf = (
+        #     (self.fail_buf > self.cfg.env.fail_to_terminal_time_s / self.dt) | self.time_out_buf | self.edge_reset_buf | goal_reset_buf
+        # )
         self.reset_buf = (
             (self.fail_buf > self.cfg.env.fail_to_terminal_time_s / self.dt) | self.time_out_buf | self.edge_reset_buf
         )
@@ -565,6 +576,9 @@ class LeggedRobot(BaseTask):
             .flatten()
         )
         self._resample_commands(env_ids)
+        if hasattr(self, "_resample_gaits"):
+            self._resample_gaits(env_ids)
+            self._step_contact_targets()
         if self.cfg.commands.heading_command:
             forward = quat_apply(self.base_quat, self.forward_vec)
             heading = torch.atan2(forward[:, 1], forward[:, 0])
@@ -992,15 +1006,20 @@ class LeggedRobot(BaseTask):
         self.dof_pos_int += (self.dof_pos - self.raw_default_dof_pos) * self.dt
 
         self.compute_foot_state()
-
+        
+        if hasattr(self, "update_stage"):
+            self.update_stage() 
+        if hasattr(self, "update_gait_phase"):
+            self.update_gait_phase()
+        if hasattr(self, "_get_swing_stance_mask"):
+            self._update_contact_history()
+            self._get_swing_stance_mask()
         self._post_physics_step_callback()
 
         # compute observations, rewards, resets, ...
         self.check_termination()
         self.compute_reward()
-        # # # 更新控制状态机所在阶段
-        # self.update_stage()
-        # self.update_gait_phase()
+
         env_ids = self.reset_buf.nonzero(as_tuple=False).flatten()
         self.reset_idx(env_ids)
         self.compute_observations()  # in some cases a simulation step might be required to refresh some obs (for example body positions)
@@ -1057,7 +1076,6 @@ class LeggedRobot(BaseTask):
         self.rigid_body_vel = self.rigid_body_state.view(self.num_envs, self.num_bodies, 13)[..., 7:10] # 获取刚体速度
         self.feet_state = self.rigid_body_state[:, self.feet_indices, :]
         self.foot_positions = self.rigid_body_state[:, self.feet_indices, 0:3]
-        self.foot_body_vel = self.rigid_body_state[:, self.feet_indices, 7:10]
         self.last_foot_positions = torch.zeros_like(self.foot_positions)
         self.foot_heights = torch.zeros_like(self.foot_positions)
         self.foot_velocities = torch.zeros_like(self.foot_positions)
@@ -1129,9 +1147,22 @@ class LeggedRobot(BaseTask):
             device=self.device,
             requires_grad=False,
         )
-        delay_max = np.int64(np.ceil(self.cfg.domain_rand.delay_ms_range[1] / 1000 / self.sim_params.dt)) # 最大延时
+        self.obs_delay_idx = torch.zeros( # 动作延时
+            self.num_envs,
+            dtype=torch.long,
+            device=self.device,
+            requires_grad=False,
+        )
+        delay_max = np.int64(np.ceil(self.cfg.domain_rand.delay_ms_range[1] / 1000 / self.sim_params.dt)) + 1 # 最大延时
+        obs_delay_max = np.int64(np.ceil(self.cfg.domain_rand.obs_delay_range[1] / 1000 / self.dt)) + 1 # 最大观测延时
         self.action_fifo = torch.zeros( # 演员fifo,维度(num_envs,delay_max,num_actions)
             (self.num_envs, delay_max, self.cfg.env.num_actions),
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
+        )
+        self.obs_fifo = torch.zeros(    # 位置和速度反馈有延迟，轮子位置反馈除外
+            (self.num_envs, obs_delay_max, self.cfg.env.num_actions*2-2),
             dtype=torch.float,
             device=self.device,
             requires_grad=False,
@@ -1313,6 +1344,16 @@ class LeggedRobot(BaseTask):
                 )
             ).squeeze(-1)
             self.action_delay_idx = action_delay_idx.long()
+        if self.cfg.domain_rand.randomize_obs_delay: # 随机化观测值反馈延时
+            obs_delay_idx = torch.round(
+                torch_rand_float(
+                    self.cfg.domain_rand.obs_delay_range[0] / 1000 / self.dt,
+                    self.cfg.domain_rand.obs_delay_range[1] / 1000 / self.dt,
+                    (self.num_envs, 1),
+                    device=self.device,
+                )
+            ).squeeze(-1)
+            self.obs_delay_idx = obs_delay_idx.long()
 
         if self.cfg.domain_rand.randomize_imu_offset:
             min_angle, max_angle = self.cfg.domain_rand.randomize_imu_offset_range
@@ -1414,10 +1455,13 @@ class LeggedRobot(BaseTask):
             )
             self.terrain_y_min = -self.cfg.terrain.border_size
 
+            env_ids = torch.arange(self.num_envs, device=self.device)
+            self.terrain_step_height = torch.from_numpy(self.terrain.terrain_step_height).to(self.device).to(torch.float)
+            self.env_step_height = torch.zeros(self.num_envs, device=self.device, requires_grad=False)
+            self.env_step_height[:] = self.terrain_step_height[self.terrain_levels[env_ids], self.terrain_types[env_ids]]
             self.terrain_goals = torch.from_numpy(self.terrain.goals).to(self.device).to(torch.float)           # 地形目标点,不同地形难度不同地形种类的目标点不一样
             self.env_goals = torch.zeros(self.num_envs, self.cfg.terrain.num_goals + self.cfg.env.num_future_goal_obs, 3, device=self.device, requires_grad=False)  # 为每个环境分配目标点
             self.cur_goal_idx = torch.zeros(self.num_envs, device=self.device, requires_grad=False, dtype=torch.long)   # 当前目标索引
-            env_ids = torch.arange(self.num_envs, device=self.device)
             temp = self.terrain_goals[self.terrain_levels[env_ids], self.terrain_types[env_ids]]                # 拿出当前env对应的目标点
             last_col = temp[:, -1].unsqueeze(1)                                                                 # 如果未来目标不够,始终用最后一个目标补齐
             self.env_goals[:] = torch.cat((temp, last_col.repeat(1, self.cfg.env.num_future_goal_obs, 1)), dim=1)[:]
@@ -1435,25 +1479,6 @@ class LeggedRobot(BaseTask):
             self.env_origins[:, 1] = spacing * yy.flatten()[: self.num_envs]
             self.env_origins[:, 2] = 0.0
             self.flat_idx = torch.arange(self.num_envs, device=self.device) # 均为平坦地形
-
-    # def _update_goals(self):
-    #     next_flag = self.reach_goal_timer > self.cfg.env.reach_goal_delay / self.dt                                                     # 达到目标时长判断
-    #     self.cur_goal_idx[next_flag] += 1                                                                                               # 移动到下一个目标点
-    #     self.reach_goal_timer[next_flag] = 0                                                                                            # 重置到达目标计时器
-
-    #     self.reached_goal_ids = torch.norm(self.root_states[:, :2] - self.cur_goals[:, :2], dim=1) < self.cfg.env.next_goal_threshold   # 目标到达判断
-    #     self.reach_goal_timer[self.reached_goal_ids] += 1
-
-    #     self.target_pos_rel = self.cur_goals[:, :2] - self.root_states[:, :2]                                                           # 目标位置
-    #     self.next_target_pos_rel = self.next_goals[:, :2] - self.root_states[:, :2]                                                     # 下一目标位置
-
-    #     norm = torch.norm(self.target_pos_rel, dim=-1, keepdim=True)                                                                    # 当前目标向量
-    #     target_vec_norm = self.target_pos_rel / (norm + 1e-5)
-    #     self.target_yaw = torch.atan2(target_vec_norm[:, 1], target_vec_norm[:, 0])                                                     # 当前目标方向
-
-    #     norm = torch.norm(self.next_target_pos_rel, dim=-1, keepdim=True)                                                               # 下一目标向量
-    #     target_vec_norm = self.next_target_pos_rel / (norm + 1e-5)
-    #     self.next_target_yaw = torch.atan2(target_vec_norm[:, 1], target_vec_norm[:, 0])                                                # 下一目标方向
 
     def _draw_goals(self):
         sphere_geom = gymutil.WireframeSphereGeometry(0.1, 32, 32, None, color=(1, 0, 0))
@@ -1481,14 +1506,6 @@ class LeggedRobot(BaseTask):
                 pose_arrow = pose_robot[:2] + 0.1*(i+3) * target_vec_norm[self.lookat_id, :2].cpu().numpy()
                 pose = gymapi.Transform(gymapi.Vec3(pose_arrow[0], pose_arrow[1], pose_robot[2]), r=None)
                 gymutil.draw_lines(sphere_geom_arrow, self.gym, self.viewer, self.envs[self.lookat_id], pose)
-            
-            # sphere_geom_arrow = gymutil.WireframeSphereGeometry(0.02, 16, 16, None, color=(0, 1, 0.5))
-            # for i in range(5):
-            #     norm = torch.norm(self.next_target_pos_rel, dim=-1, keepdim=True)
-            #     target_vec_norm = self.next_target_pos_rel / (norm + 1e-5)
-            #     pose_arrow = pose_robot[:2] + 0.2*(i+3) * target_vec_norm[self.lookat_id, :2].cpu().numpy()
-            #     pose = gymapi.Transform(gymapi.Vec3(pose_arrow[0], pose_arrow[1], pose_robot[2]), r=None)
-            #     gymutil.draw_lines(sphere_geom_arrow, self.gym, self.viewer, self.envs[self.lookat_id], pose)
 
     def _gather_cur_goals(self, future=0):              # 取对应未来步数的三维目标值
         return self.env_goals.gather(1, (self.cur_goal_idx[:, None, None]+future).expand(-1, -1, self.env_goals.shape[-1])).squeeze(1)
@@ -1527,202 +1544,6 @@ class LeggedRobot(BaseTask):
             torch.norm(
                 self.contact_forces[:, self.penalised_contact_indices, :], dim=-1) > 1.0, dim=1)
 
-
-
-
-    # def step(self, actions):
-    #     """Apply actions, simulate, call self.post_physics_step()
-
-    #     Args:
-    #         actions (torch.Tensor): Tensor of shape (num_envs, num_actions_per_env)
-    #     """
-    #     clip_actions = self.cfg.normalization.clip_actions
-    #     self.actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
-    #     # step physics and render each frame
-    #     self.render()
-    #     self.pre_physics_step()
-    #     for _ in range(self.cfg.control.decimation):
-    #         self.envs_steps_buf += 1
-    #         self.action_fifo = torch.cat((self.actions.unsqueeze(1), self.action_fifo[:, :-1, :]), dim=1)
-    #         self.torques = self._compute_torques(
-    #             self.action_fifo[torch.arange(self.num_envs), self.action_delay_idx, :]
-    #         ).view(self.torques.shape)
-    #         self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(self.torques))
-    #         if self.cfg.domain_rand.push_robots:
-    #             self._push_robots()
-    #         self.gym.simulate(self.sim)
-    #         if self.device == "cpu":
-    #             self.gym.fetch_results(self.sim, True)
-    #         self.gym.refresh_dof_state_tensor(self.sim)
-    #         self.compute_dof_vel()
-    #     self.post_physics_step()
-
-    #     # return clipped obs, clipped states (None), rewards, dones and infos
-    #     clip_obs = self.cfg.normalization.clip_observations
-    #     self.obs_buf = torch.clip(self.obs_buf, -clip_obs, clip_obs)
-    #     if self.privileged_obs_buf is not None:
-    #         self.privileged_obs_buf = torch.clip(self.privileged_obs_buf, -clip_obs, clip_obs)
-    #     return (
-    #         self.obs_buf,
-    #         self.privileged_obs_buf,
-    #         self.rew_buf,
-    #         self.reset_buf,
-    #         self.extras,
-    #         self.obs_history,
-    #     )
-
-
-
-
-
-    # def reset_idx(self, env_ids):
-    #     """Reset some environments.
-    #         Calls self._reset_dofs(env_ids), self._reset_root_states(env_ids), and self._resample_commands(env_ids)
-    #         [Optional] calls self._update_terrain_curriculum(env_ids), self.update_command_curriculum(env_ids) and
-    #         Logs episode info
-    #         Resets some buffers
-
-    #     Args:
-    #         env_ids (list[int]): List of environment ids which must be reset
-    #     """
-    #     if len(env_ids) == 0:
-    #         return
-    #     # update curriculum
-    #     if self.cfg.terrain.curriculum:
-    #         self._update_terrain_curriculum(env_ids)
-    #         if self.cfg.commands.curriculum:
-    #             time_out_env_ids = self.time_out_buf.nonzero(as_tuple=False).flatten()
-    #             self.update_command_curriculum(time_out_env_ids)
-    #     # avoid updating command curriculum at each step since the maximum command is common to all envs
-    #     if self.cfg.commands.curriculum and (self.common_step_counter % self.max_episode_length == 0):
-    #         self.update_command_curriculum(env_ids)
-
-    #     # reset robot states
-    #     self._reset_dofs(env_ids)
-    #     self._reset_root_states(env_ids)
-    #     self._resample_commands(env_ids)
-
-    #     # reset buffers
-    #     self.last_actions[env_ids] = 0.0
-    #     self.last_dof_pos[env_ids] = self.dof_pos[env_ids]
-    #     self.last_base_position[env_ids] = self.base_position[env_ids]
-    #     self.last_dof_vel[env_ids] = 0.0
-    #     self.feet_air_time[env_ids] = 0.0
-    #     self.episode_length_buf[env_ids] = 0
-    #     self.envs_steps_buf[env_ids] = 0
-    #     self.reset_buf[env_ids] = 1
-    #     self.obs_history[env_ids] = 0
-    #     obs_buf = self.compute_proprioception_observations()
-    #     self.obs_history[env_ids] = obs_buf[env_ids].repeat(1, self.obs_history_length)
-    #     self.fail_buf[env_ids] = 0
-    #     self.action_fifo[env_ids] = 0
-    #     self.dof_pos_int[env_ids] = 0
-    #     # fill extras
-    #     self.extras["episode"] = {}
-    #     for key in self.episode_sums.keys():
-    #         self.extras["episode"]["rew_" + key] = (
-    #             torch.mean(self.episode_sums[key][env_ids]) / self.max_episode_length_s
-    #         )
-    #         self.episode_sums[key][env_ids] = 0.0
-    #     # log additional curriculum info
-    #     if self.cfg.terrain.curriculum:
-    #         self.extras["episode"]["terrain_level"] = torch.mean(self.terrain_levels.float())
-    #     if self.cfg.commands.curriculum:
-    #         self.extras["episode"]["a_flat_max_command_x"] = torch.mean(
-    #             self.command_ranges["lin_vel_x"][self.flat_idx, 1].float()
-    #         )
-    #     if self.cfg.terrain.curriculum and self.cfg.commands.curriculum:
-    #         self.extras["episode"]["a_smooth_slope_max_command_x"] = torch.mean(
-    #             self.command_ranges["lin_vel_x"][self.smooth_slope_idx, 1].float()
-    #         )
-    #         self.extras["episode"]["a_rough_slope_max_command_x"] = torch.mean(
-    #             self.command_ranges["lin_vel_x"][self.rough_slope_idx, 1].float()
-    #         )
-    #         self.extras["episode"]["a_stair_up_max_command_x"] = torch.mean(
-    #             self.command_ranges["lin_vel_x"][self.stair_up_idx, 1].float()
-    #         )
-    #         self.extras["episode"]["a_stair_down_max_command_x"] = torch.mean(
-    #             self.command_ranges["lin_vel_x"][self.stair_down_idx, 1].float()
-    #         )
-    #         self.extras["episode"]["a_discrete_max_command_x"] = torch.mean(
-    #             self.command_ranges["lin_vel_x"][self.discrete_idx, 1].float()
-    #         )
-    #     # send timeout info to the algorithm
-    #     if self.cfg.env.send_timeouts:
-    #         self.extras["time_outs"] = self.time_out_buf | self.edge_reset_buf
-
-
-    # def compute_proprioception_observations(self):
-    #     # note that observation noise need to modified accordingly !!!
-    #     obs_buf = torch.cat(
-    #         (
-    #             # self.base_lin_vel * self.obs_scales.lin_vel,
-    #             self.base_ang_vel * self.obs_scales.ang_vel, # base角速度,维度3
-    #             self.projected_gravity, # 重力投影,维度3
-    #             self.commands[:, :3] * self.commands_scale, # 命令,维度4
-    #             self.dof_pos * self.obs_scales.dof_pos, # 关节位置,维度8
-    #             self.dof_vel * self.obs_scales.dof_vel, # 关节速度,维度8
-    #             self.actions, # 上一时刻动作,维度8
-    #         ),
-    #         dim=-1,
-    #     )
-    #     return obs_buf
-
-
-
-
-
-
-
-    # def _resample_commands(self, env_ids):
-    #     """Randommly select commands of some environments
-
-    #     Args:
-    #         env_ids (List[int]): Environments ids for which new commands are needed
-    #     """
-    #     self.commands[env_ids, 0] = (
-    #         self.command_ranges["lin_vel_x"][env_ids, 1] - self.command_ranges["lin_vel_x"][env_ids, 0]
-    #     ) * torch.rand(len(env_ids), device=self.device) + self.command_ranges["lin_vel_x"][env_ids, 0]
-    #     self.commands[env_ids, 1] = (
-    #         self.command_ranges["ang_vel_yaw"][env_ids, 1] - self.command_ranges["ang_vel_yaw"][env_ids, 0]
-    #     ) * torch.rand(len(env_ids), device=self.device) + self.command_ranges["ang_vel_yaw"][env_ids, 0]
-    #     self.commands[env_ids, 2] = (
-    #         self.command_ranges["height"][env_ids, 1] - self.command_ranges["height"][env_ids, 0]
-    #     ) * torch.rand(len(env_ids), device=self.device) + self.command_ranges["height"][env_ids, 0]
-    #     if self.cfg.commands.heading_command:
-    #         self.commands[env_ids, 3] = torch_rand_float(
-    #             self.command_ranges["heading"][0],
-    #             self.command_ranges["heading"][1],
-    #             (len(env_ids), 1),
-    #             device=self.device,
-    #         ).squeeze(1)
-
-
-
-
-
-    # def _update_goals_for_envs(self, env_ids):
-    #     """为指定环境更新目标点"""
-    #     if len(env_ids) == 0:
-    #         return
-    #     # 1. 从 terrain_goals 获取新目标点
-    #     # terrain_goals 形状: [num_rows, num_cols, num_goals, 3]
-    #     new_goals = self.terrain_goals[self.terrain_levels[env_ids], self.terrain_types[env_ids]]
-    #     # new_goals 形状: [len(env_ids), num_goals, 3]
-    #     # 2. 更新 env_goals
-    #     # 先获取最后一个目标点用于补齐
-    #     last_goal = new_goals[:, -1, :].unsqueeze(1)  # [len(env_ids), 1, 3]
-    #     # 拼接当前目标和未来目标
-    #     future_goals = last_goal.repeat(1, self.cfg.env.num_future_goal_obs, 1)
-    #     self.env_goals[env_ids] = torch.cat((new_goals, future_goals), dim=1)
-    #     # 3. 重置当前目标索引
-    #     self.cur_goal_idx[env_ids] = 0
-    #     # 4. 更新当前目标和下一个目标
-    #     self.cur_goals[env_ids] = self.env_goals[env_ids, 0, :]
-    #     if self.cfg.env.num_future_goal_obs > 0:
-    #         self.next_goals[env_ids] = self.env_goals[env_ids, 1, :]
-
-    # ----------------------------------------
 
 
 

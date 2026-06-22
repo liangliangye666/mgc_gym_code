@@ -54,6 +54,7 @@ class Terrain:
         self.cfg.num_sub_terrains = cfg.num_rows * cfg.num_cols             # 子地形数量
         self.env_origins = np.zeros((cfg.num_rows, cfg.num_cols, 3))        # 地形零点
         self.goals = np.zeros((cfg.num_rows, cfg.num_cols, cfg.num_goals, 3))               # 每个子地形里定义多个目标点
+        self.terrain_step_height = np.zeros((cfg.num_rows, cfg.num_cols))                     # 每个地形的台阶高度(只针对台阶或矩形障碍等有台阶地形)
         self.num_goals = cfg.num_goals                                                      # 目标点数量
         self.width_per_env_pixels = int(self.env_width / cfg.horizontal_scale)              # 地形宽度像素值
         self.length_per_env_pixels = int(self.env_length / cfg.horizontal_scale)            # 地形长度像素值
@@ -142,11 +143,10 @@ class Terrain:
             horizontal_scale=self.cfg.horizontal_scale,         # 水平缩放比例,对应x-y平面1代表多少
         )
         slope = difficulty * 0.5                                # 斜率
-        random_height = 0.05 + difficulty * 0.05                # 随机高度
-        step_height = 0.06 + 0.1 * difficulty                  # 台阶高度
-        # step_height = 0.08                  # 台阶高度
-        step_width = 0.72 - 0.4 * difficulty
-        discrete_obstacles_height = 0.03 + difficulty * 0.1     # 离散障碍物高度
+        random_height = 0.02 + difficulty * 0.2                # 随机高度
+        step_height = 0.02 + 0.2 * difficulty                   # 台阶高度
+        step_width = 0.72 - 0.4 * difficulty                    # 台阶宽度
+        discrete_obstacles_height = 0.02 + difficulty * 0.2     # 离散障碍物高度
         stepping_stones_size = 1.5 * (1.05 - difficulty)        # 石头尺寸
         stone_distance = 0.05 if difficulty == 0 else 0.1       # 石头距离
         gap_size = 1.0 * difficulty                             # 沟宽度尺寸
@@ -155,6 +155,7 @@ class Terrain:
             terrain_utils.pyramid_sloped_terrain(terrain, slope=0, platform_size=3.0)       # 完全平地
             num_goals = self.num_goals
             terrain.goals = np.zeros((num_goals,3))
+            terrain.step_height = 0
             # step_width = step_width
             for k in range(num_goals):
                 # terrain.goals[k] = [5.0 + 0.6 * k * step_width, 4.0, 0.2]
@@ -171,6 +172,24 @@ class Terrain:
                 terrain, slope=slope, platform_size=3.0
             )
         elif choice < self.proportions[2]:
+            platform_surrounded_small_blocks_terrain(
+                terrain,
+                block_height=0.02 + difficulty * 0.2,
+                block_length=0.4,
+                block_width=0.4,
+                spacing_x=0.8,
+                spacing_y=0.5,
+                platform_size=2.0,
+                y_jitter=0.2,
+                x_jitter=0.2,
+            )
+
+            num_goals = self.num_goals
+            terrain.goals = np.zeros((num_goals, 3))
+            terrain.step_height = 0.02 + difficulty * 0.12
+            for k in range(num_goals):
+                terrain.goals[k] = [9.0, self.env_width / 2.0, 0.2]
+        elif choice < self.proportions[3]:
             if (
                 choice
                 < self.proportions[1] + (self.proportions[2] - self.proportions[1]) / 2
@@ -181,27 +200,41 @@ class Terrain:
             )
             terrain_utils.random_uniform_terrain(
                 terrain,
-                min_height=-random_height,      # 随机高度范围
+                min_height=0.0,      # 随机高度范围
                 max_height=random_height,
                 step=0.005,                     # 高度变化的最小单位
-                downsampled_scale=0.2,          # 控制rough terrain的"空间尺度",也就是凸起之间的距离
+                downsampled_scale=0.5,          # 控制rough terrain的"空间尺度",也就是凸起之间的距离
             )
-        elif choice < self.proportions[4]:
-            if choice < self.proportions[3]:
+            num_goals = self.num_goals
+            terrain.goals = np.zeros((num_goals,3))
+            terrain.step_height = discrete_obstacles_height
+            for k in range(num_goals):
+                y_rand = np.random.uniform(-2.0, 10.0)
+                terrain.goals[k] = [9.0, y_rand, 0.2]
+                # terrain.goals[k] = [8.0, 4.0, 0.2]
+        elif choice < self.proportions[5]:
+            if choice < self.proportions[4]:
                 step_height *= -1
             terrain_utils.pyramid_stairs_terrain(       # 生成台阶地形
                 terrain, step_width=step_width, step_height=step_height, platform_size=4.0
             )
             num_goals = self.num_goals
             terrain.goals = np.zeros((num_goals,3))
+            terrain.step_height = abs(step_height)
             # step_width = 0.7
             for k in range(num_goals):
-                # terrain.goals[k] = [5.0 + 0.6 * k * step_width, 4.0, 0.2]
-                y_rand = np.random.uniform(-2.0, 10.0)
-                terrain.goals[k] = [9.0, y_rand, 0.2]
-                # terrain.goals[k] = [8.0, 4.0, 0.2]
+                # y_rand = np.random.uniform(-2.0, 10.0)
+                # terrain.goals[k] = [9.0, y_rand, 0.2]
+                center_y = self.env_width / 2.0
+                if np.random.rand() < 0.2:
+                    y_offset = 0.0
+                else:
+                    side = np.random.choice([-1.0, 1.0])
+                    y_offset = side * np.random.uniform(0.5, 6.0)
+                y_rand = center_y + y_offset
+                terrain.goals[k] = [self.env_length / 2.0 + 5.0, y_rand, 0.2]
 
-        elif choice < self.proportions[5]:
+        elif choice < self.proportions[6]:
             num_rectangles = 4                         # 随机矩形障碍的数量
             rectangle_min_size = 2.5                    # 随机矩形障碍的尺寸
             rectangle_max_size = 3.5
@@ -213,20 +246,14 @@ class Terrain:
                 num_rectangles,
                 platform_size=4.0,
             )
-            # step_height = discrete_obstacles_height
-            # # print("step:", terrain.length)
-            # step_start = int(terrain.length * 0.7)
-            # step_end = int(terrain.length * 0.75)
-            # # print("start", step_start)
-
-            # terrain.height_field_raw[step_start:step_end,:] = step_height / 0.005#step_height
             num_goals = self.num_goals
             terrain.goals = np.zeros((num_goals,3))
+            terrain.step_height = discrete_obstacles_height
             for k in range(num_goals):
                 y_rand = np.random.uniform(-2.0, 10.0)
                 terrain.goals[k] = [9.0, y_rand, 0.2]
                 # terrain.goals[k] = [8.0, 4.0, 0.2]
-        elif choice < self.proportions[6]:              
+        elif choice < self.proportions[7]:              
             terrain_utils.stepping_stones_terrain(      # 踏石地形
                 terrain,
                 stone_size=stepping_stones_size,        # 石头尺寸
@@ -234,8 +261,16 @@ class Terrain:
                 max_height=0.0,                         # 石头高度随机变化范围,0代表所有石头高度一样
                 platform_size=4.0,                      # 平台尺寸
             )
-        elif choice < self.proportions[7]:
+            num_goals = self.num_goals
+            terrain.goals = np.zeros((num_goals,3))
+            terrain.step_height = discrete_obstacles_height
+            for k in range(num_goals):
+                y_rand = np.random.uniform(-2.0, 10.0)
+                terrain.goals[k] = [9.0, y_rand, 0.2]
+                # terrain.goals[k] = [8.0, 4.0, 0.2]
+        elif choice < self.proportions[8]:
             gap_terrain(terrain, gap_size=gap_size, platform_size=3.0)  # 宽沟地形
+
         else:
             pit_terrain(terrain, depth=pit_depth, platform_size=4.0)    # 深坑地形
 
@@ -262,6 +297,9 @@ class Terrain:
         )
         self.env_origins[i, j] = [env_origin_x, env_origin_y, env_origin_z]
         self.goals[i, j, :, :3] = terrain.goals + [i * self.env_length, j * self.env_width, 0]             # 把子地形goals映射到世界坐标,第i,j个环境的所有目标点的x,y值
+        # print("terrain_goals:", terrain.goals)
+        self.terrain_step_height[i, j] = terrain.step_height
+        # print("step:", self.terrain_step_height[i, j])
 
 def gap_terrain(terrain, gap_size, platform_size=1.0):                  # 挖沟
     gap_size = int(gap_size / terrain.horizontal_scale)
@@ -290,3 +328,60 @@ def pit_terrain(terrain, depth, platform_size=1.0):                     # 挖坑
     y1 = terrain.width // 2 - platform_size
     y2 = terrain.width // 2 + platform_size
     terrain.height_field_raw[x1:x2, y1:y2] = -depth
+
+def platform_surrounded_small_blocks_terrain(
+    terrain,
+    block_height,
+    block_length,
+    block_width,
+    spacing_x,
+    spacing_y,
+    platform_size,
+    y_jitter=0.08,
+    x_jitter=0.05,
+):
+    h = int(block_height / terrain.vertical_scale)
+    block_l = max(1, int(block_length / terrain.horizontal_scale))
+    block_w = max(1, int(block_width / terrain.horizontal_scale))
+    spacing_x_px = max(1, int(spacing_x / terrain.horizontal_scale))
+    spacing_y_px = max(1, int(spacing_y / terrain.horizontal_scale))
+    x_jitter_px = int(x_jitter / terrain.horizontal_scale)
+    y_jitter_px = int(y_jitter / terrain.horizontal_scale)
+
+    center_x = terrain.length // 2
+    center_y = terrain.width // 2
+
+    platform_px = int(platform_size / terrain.horizontal_scale)
+    platform_x1 = center_x - platform_px // 2
+    platform_x2 = center_x + platform_px // 2
+    platform_y1 = center_y - platform_px // 2
+    platform_y2 = center_y + platform_px // 2
+
+    margin_px = int(1.0 / terrain.horizontal_scale)
+    x = margin_px
+
+    while x < terrain.length - margin_px:
+        y = margin_px
+        while y < terrain.width - margin_px:
+            jx = np.random.randint(-x_jitter_px, x_jitter_px + 1) if x_jitter_px > 0 else 0
+            jy = np.random.randint(-y_jitter_px, y_jitter_px + 1) if y_jitter_px > 0 else 0
+
+            x_center = x + jx
+            y_center = y + jy
+
+            x1 = max(x_center - block_l // 2, 0)
+            x2 = min(x_center + block_l // 2, terrain.length)
+            y1 = max(y_center - block_w // 2, 0)
+            y2 = min(y_center + block_w // 2, terrain.width)
+
+            in_platform_x = x2 > platform_x1 and x1 < platform_x2
+            in_platform_y = y2 > platform_y1 and y1 < platform_y2
+
+            if not (in_platform_x and in_platform_y):
+                terrain.height_field_raw[x1:x2, y1:y2] = h
+
+            y += spacing_y_px
+        x += spacing_x_px
+
+    terrain.height_field_raw[platform_x1:platform_x2, platform_y1:platform_y2] = 0
+

@@ -247,8 +247,8 @@ class PPO:
             nn.utils.clip_grad_norm_(self.actor_critic.parameters(), self.max_grad_norm) # 梯度剪裁
             self.optimizer.step() # 参数更新,同时更新theta和
 
-            with torch.no_grad():                           # by mgc,解决策略收敛后继续训练崩盘问题,2026/5/24
-                self.actor_critic.std.clamp_(0.05, 1.0)
+            # with torch.no_grad():                           # by mgc,解决策略收敛后继续训练崩盘问题,2026/5/24
+            #     self.actor_critic.std.clamp_(0.05, 1.0)
             # 统计信息记录
             mean_value_loss += value_loss.item()
             mean_surrogate_loss += surrogate_loss.item()

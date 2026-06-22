@@ -59,10 +59,10 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         heading_command = False  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
         num_commands = 6 # 命令的数量
         class ranges: # 定义了每个命令可以取值的范围
-            lin_vel_x = [-0.5, 0.5]     # min max [m/s],线速度命令范围
+            lin_vel_x = [-1, 1]     # min max [m/s],线速度命令范围
             lin_vel_y = [-0.2, 0.2]
             ang_vel_yaw = [-0.5, 0.5]   # 角速度命令范围
-            height = [0.645, 0.645]     # 高度范围上下浮动3cm
+            height = [0.643, 0.643]     # 高度范围上下浮动3cm
             heading = [-3.14, 3.14]     # 朝向范围
             mode_normalization = [0, 1] # 模式归一化,暂时两个模式-步态占比0.8,两轮平衡占比0.2
         gait_train_proportion = 0.8     # 训练步态的环境占比
@@ -71,18 +71,18 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
 
     class init_state(LeggedRobotCfg.init_state):
 
-        pos = [0.0, 0.0, 0.645 + 0.05]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
+        pos = [0.0, 0.0, 0.643 + 0.05]  # [0.0, 0.0, 0.63]  # x,y,z [m]  #0.515,base初始位置
         rot = [0.0, 0.0, 0.0, 1.0]  # x,y,z,w [quat],base初始姿态
         lin_vel = [0.0, 0.0, 0.0]  # x,y,z [m/s]
         ang_vel = [0.0, 0.0, 0.0]  # x,y,z [rad/s]
         default_joint_angles = {  # target angles when action = 0.0,各关节初始角度
             "left_hip_roll_joint": 0.0523599,
             "left_hip_pitch_joint": 0.261799,
-            "left_knee_joint": -0.51091,
+            "left_knee_joint": -0.563811,
             "left_wheel_joint": 0.0,
-            "right_hip_roll_joint": 0.0523599, 
+            "right_hip_roll_joint": -0.0523599, 
             "right_hip_pitch_joint": 0.261799,   
-            "right_knee_joint": -0.51091,  
+            "right_knee_joint": -0.563811,  
             "right_wheel_joint": 0.0,
         }
 
@@ -94,15 +94,15 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
 
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip_roll": 40, "hip_pitch": 40, "knee": 80, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip_roll": 200, "hip_pitch": 200, "knee": 250, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 2, "wheel": 1.5}  # [N*m*s/rad]
+        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 3, "wheel": 1.5}  # [N*m*s/rad]
 
         # 抽取率：每个策略时间步长内的控制动作更新次数
-        decimation = 2
+        decimation = 4
 
     class asset(LeggedRobotCfg.asset):
-        file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/urdf/l5aurdf20260420.urdf" # 机器人urdf路径
+        file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/urdf/l5aurdf20260521.urdf" # 机器人urdf路径
         name = "l5a" # 机器人名称
         foot_name = "wheel" # 足部名称
         joint_indices = [0, 1, 2, 4, 5, 6] # 关节索引
@@ -159,7 +159,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
 
             # regulation related rewards
             nominal_foot_position = 4.0
-            leg_symmetry = 0.5
+            leg_symmetry = 2
             same_foot_x_position = -50 # 0.5
             same_foot_z_position = -100
             lin_vel_z = -0.3
@@ -172,6 +172,8 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             orientation = -12.0
             feet_distance = -100
             base_height = -20
+            collision = -50.0
+            keep_balance = 1
 
         # 跟踪奖励的高斯分布参数 σ，跟踪奖励计算公式：exp(-error^2/sigma)
         tracking_sigma = 0.2
@@ -181,7 +183,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         leg_symmetry_tracking_sigma = 0.001
         foot_x_position_sigma = 0.001
         height_tracking_sigma = 0.01
-        base_height_target = 0.645
+        base_height_target = 0.643
         feet_height_target = 0.10
         min_feet_distance = 0.27
         max_feet_distance = 0.30

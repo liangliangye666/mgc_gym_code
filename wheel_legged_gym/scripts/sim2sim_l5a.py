@@ -42,10 +42,12 @@ import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor
 
 
 class cmd:
-    vel_x = 0.6
+    vel_x = 0.0
+    if robot_type == "l5a_2wheel_upstairs" or robot_type == "l5a_2wheel_upstairs_cp":
+        vel_x = 0.5
     vel_y = 0.0
-    vel_yaw = 0.0
-    height = 0.645
+    vel_yaw = -0.0
+    height = 0.643
     heading = 0
 
 
@@ -186,13 +188,14 @@ def run_mujoco(policy, cfg):
 
 
     for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
-        phase = (count_lowlevel * 0.005) % 0.5 / 0.5
-        if count_lowlevel < 1000:
-            gait_enable = 0
-        elif count_lowlevel < 3000:
-            gait_enable = 1
-        else:
-            gait_enable = 0
+        if robot_type == "l5a_2wheel_gait" or robot_type == "l5a_2wheel_gait_cp":
+            phase = (count_lowlevel * 0.005) % cfg.gait.gait_period / cfg.gait.gait_period
+            if count_lowlevel < 1000:
+                gait_enable = 0
+            elif count_lowlevel < 3000:
+                gait_enable = 1
+            else:
+                gait_enable = 0
         # Obtain an observation
         q, dq, quat, v, omega, gvec = get_obs(data) # 获取17+16+4+3+3+3=46维的观测量
 
@@ -228,11 +231,20 @@ def run_mujoco(policy, cfg):
             obs[0, 10:16] = (q[cfg.asset.joint_indices] - default_q[cfg.asset.joint_indices]) * cfg.normalization.obs_scales.dof_pos
             obs[0, 16:24] = dq * cfg.normalization.obs_scales.dof_vel
             obs[0, 24:32] = action
-            if robot_type == "l5a_2wheel_gait":
+            if robot_type == "l5a_2wheel_gait" or robot_type == "l5a_2wheel_gait_cp":
                 obs[0, 32] = gait_enable
                 obs[0, 33] = np.sin(2 * np.pi * phase) * gait_enable
                 obs[0, 34] = np.cos(2 * np.pi * phase) * gait_enable
                 obs[0, 35] = 1
+            if robot_type == "l5a_2wheel_gait_limx":
+                obs[0, 32] = gait_enable
+                obs[0, 33] = np.sin(2 * np.pi * phase) * gait_enable
+                obs[0, 34] = np.cos(2 * np.pi * phase) * gait_enable
+                obs[0, 35] = 2.0
+                obs[0, 36] = 0.5
+                obs[0, 37] = 0.5
+                obs[0, 38] = 0.1
+
 
             obs[0,-3:]=v * cfg.normalization.obs_scales.lin_vel
 
@@ -282,16 +294,15 @@ if __name__ == "__main__":
             if args.terrain:
                 mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l2c/mjcf/y1a-terrain.xml"
             else:
-                mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/xml/l5aurdf20260420.xml"
-            sim_duration = 200.0 # 单次仿真持续时间为10s
-            dt = 0.005 # 仿真步长为0.005s
-            decimation = 2 # 设置控制频率与仿真频率的比值为10,即每隔10步执行一次控制策略
-
+                mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/xml/l5aurdf20260521.xml"
+            sim_duration = 100.0
+            dt = 0.005
+            decimation = 4
         class robot_config:
             # kps = np.array([30, 50, 50, 0, 30, 50, 50, 0], dtype=np.double)
             # kds = np.array([3, 5, 5, 5, 3, 5, 5, 5], dtype=np.double)
-            kps = np.array([40, 40, 80, 0, 40, 40, 80, 0], dtype=np.double)
-            kds = np.array([2, 2, 2, 1.5, 2, 2, 2, 1.5], dtype=np.double)
+            kps = np.array([100, 100, 150, 0, 100, 100, 150, 0], dtype=np.double)
+            kds = np.array([2, 2, 3, 1.5, 2, 2, 3, 1.5], dtype=np.double)
             # tau_limit = np.array([300, 300, 60, 60, 300, 300, 60, 60], dtype=np.double)
             tau_limit = np.array([745, 745, 460, 400, 745, 745, 460, 400], dtype=np.double)
             # tau_limit = 800.0 * np.ones(8, dtype=np.double)  # 力矩限制

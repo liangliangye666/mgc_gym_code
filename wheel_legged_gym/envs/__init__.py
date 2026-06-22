@@ -49,7 +49,19 @@ elif robot_type == "l5a_2wheel_gait":
     from .l5a_2wheel_gait.l5a_2wheel import L5A_2WHEEL
     from .l5a_2wheel_gait.l5a_2wheel_config import (L5A_2WHEEL_Cfg, L5A_2WHEEL_CfgPPO,)
     task_registry.register("l5a_2wheel", L5A_2WHEEL, L5A_2WHEEL_Cfg(), L5A_2WHEEL_CfgPPO())
+elif robot_type == "l5a_2wheel_gait_cp":
+    from .l5a_2wheel_gait_cp.l5a_2wheel import L5A_2WHEEL
+    from .l5a_2wheel_gait_cp.l5a_2wheel_config import (L5A_2WHEEL_Cfg, L5A_2WHEEL_CfgPPO,)
+    task_registry.register("l5a_2wheel", L5A_2WHEEL, L5A_2WHEEL_Cfg(), L5A_2WHEEL_CfgPPO())
+elif robot_type == "l5a_2wheel_gait_limx":
+    from .l5a_2wheel_gait_limx.l5a_2wheel import L5A_2WHEEL
+    from .l5a_2wheel_gait_limx.l5a_2wheel_config import (L5A_2WHEEL_Cfg, L5A_2WHEEL_CfgPPO,)
+    task_registry.register("l5a_2wheel", L5A_2WHEEL, L5A_2WHEEL_Cfg(), L5A_2WHEEL_CfgPPO())
 elif robot_type == "l5a_2wheel_upstairs":
     from .l5a_2wheel_upstairs.l5a_2wheel import L5A_2WHEEL
     from .l5a_2wheel_upstairs.l5a_2wheel_config import (L5A_2WHEEL_Cfg, L5A_2WHEEL_CfgPPO,)
+    task_registry.register("l5a_2wheel", L5A_2WHEEL, L5A_2WHEEL_Cfg(), L5A_2WHEEL_CfgPPO())
+elif robot_type == "l5a_2wheel_upstairs_cp":
+    from .l5a_2wheel_upstairs_cp.l5a_2wheel import L5A_2WHEEL
+    from .l5a_2wheel_upstairs_cp.l5a_2wheel_config import (L5A_2WHEEL_Cfg, L5A_2WHEEL_CfgPPO,)
     task_registry.register("l5a_2wheel", L5A_2WHEEL, L5A_2WHEEL_Cfg(), L5A_2WHEEL_CfgPPO())

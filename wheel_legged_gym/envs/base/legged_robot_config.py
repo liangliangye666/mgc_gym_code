@@ -72,7 +72,7 @@ class LeggedRobotCfg(BaseConfig):
         terrain_length = 8.0
         terrain_width = 8.0
         # trimesh only:
-        slope_treshold = 0.75  # slopes above this threshold will be corrected to vertical surfaces
+        slope_treshold = 0.1  # slopes above this threshold will be corrected to vertical surfaces
 
     class depth:
         use_camera = False
@@ -144,13 +144,13 @@ class LeggedRobotCfg(BaseConfig):
         restitution_range = [0.0, 1.0]  # 弹性恢复系数的随机范围
 
         randomize_base_mass = True  # 是否随机化机器人基座的质量
-        added_mass_range = [-0.5, 2.0]  # 基座质量的随机附加范围
+        added_mass_range = [-1.5, 1.5]  # 基座质量的随机附加范围
 
         randomize_inertia = True  # 是否随机化惯性矩
-        randomize_inertia_range = [0.8, 1.2]  # 惯性矩的随机比例范围
+        randomize_inertia_range = [0.9, 1.1]  # 惯性矩的随机比例范围
 
         randomize_base_com = True  # 是否随机化基座的质心偏移
-        rand_com_vec = [0.03, 0.02, 0.03]  # 基座质心的偏移量范围 (x, y, z)
+        rand_com_vec = [0.02, 0.03, 0.05]  # 基座质心的偏移量范围 (x, y, z)
 
         push_robots = True  # 是否随机推机器人
         push_interval_s = 7  # 推动的间隔时间 (秒)
@@ -169,6 +169,8 @@ class LeggedRobotCfg(BaseConfig):
 
         randomize_action_delay = True  # 是否随机化执行动作的延迟
         delay_ms_range = [0, 30]  # 动作延迟的随机范围 (毫秒)
+        randomize_obs_delay = False # 是否随机化观测值反馈的延迟
+        obs_delay_range = [0, 30]
 
         randomize_imu_offset = True
         randomize_imu_offset_range = [-1.2, 1.2]
@@ -213,7 +215,7 @@ class LeggedRobotCfg(BaseConfig):
             lin_vel = 0.1
             ang_vel = 0.2
             gravity = 0.05
-            height_measurements = 0.1
+            height_measurements = 0.01
 
     # viewer camera:
     class viewer:
