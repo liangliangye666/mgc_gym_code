@@ -128,7 +128,7 @@ def play(args):
         env.commands[:, 3] = 0.643  # height
         env.commands[:, 5] = 0.2    # gait_resample
         if robot_type == "l5a_2wheel_upstairs" or  robot_type == "l5a_2wheel_upstairs_cp":
-            env.commands[:, 0] = -0.5    # lin_vel_x
+            env.commands[:, 0] = 0.5    # lin_vel_x
         if i > 300 and i<=1500:
             vel_cmd[:] = env.commands[:, 0] * np.clip((i - 300) * 0.05, 0, 1)
         else:

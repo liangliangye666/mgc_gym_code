@@ -130,7 +130,6 @@ class L5A_2WHEEL(LeggedRobot):
         self.stance_mask[env_ids] = 1.0                         # 两条腿都重置为支撑腿
         self.in_double_support[env_ids] = True                        # 双支撑
         self.ds_time[env_ids] = 0.0                                # 双支撑时间
-        self.swing_check_time[env_ids] = 0.0
 
         # fill extras
         self.extras["episode"] = {} # 创建一个空字典用于存储当前回合的统计信息
@@ -395,101 +394,86 @@ class L5A_2WHEEL(LeggedRobot):
         self.has_swing = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.in_double_support = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)                        # 双支撑
         self.ds_time = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)                                # 双支撑时间
-        self.swing_check_time = torch.zeros(self.num_envs, dtype=torch.float, device=self.device,)
 
     def _get_swing_stance_mask(self):
         # ===== 1. 接触检测 =====
         force_xy = torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2)
-        # print("contact_force:", force_xy[0])
         contact = force_xy > 20.0
-        stable = (self.contact_history.sum(dim=2) >= 2)     # 稳定接触（推荐 >=2 更鲁棒）
-        need_swing = contact.sum(dim=1) > 0                 # 是否需要抬腿（平地不抬）
+        stable = (self.contact_history.sum(dim=2) >= 2)
+        # 是否需要抬腿：这里建议用 stable，而不是瞬时 contact
+        need_swing = stable.sum(dim=1) > 0
         # ===== 2. 选候选腿 =====
-        candidate = torch.argmax(force_xy, dim=1)           # 默认：接触力大的,return:0-left_leg,1-right_leg
-        one_contact = (contact.sum(dim=1) == 1)             # 如果单脚接触
+        candidate = torch.argmax(force_xy, dim=1)
+        one_contact = (contact.sum(dim=1) == 1)
         if one_contact.any():
-            candidate[one_contact] = torch.argmax(contact[one_contact].float(), dim=1) # 抬单脚接触的那只脚
-        one_stable = (stable.sum(dim=1) == 1)               # 如果双脚接触 & 单脚稳定接触,选稳定接触的脚
+            candidate[one_contact] = torch.argmax(contact[one_contact].float(), dim=1)
+        one_stable = (stable.sum(dim=1) == 1)
         mask = (contact.sum(dim=1) == 2) & one_stable
         if mask.any():
             candidate[mask] = torch.argmax(stable[mask].float(), dim=1)
-
-        # ===== 3. swing状态机 =====
-        swing_duration = 0.2                                # 摆动周期
-        ds_duration = 0.1                                   # 双支撑时间
-        in_ds = self.in_double_support
-        self.ds_time[in_ds] += self.dt
-        ds_finished = in_ds & (self.ds_time >= ds_duration) & need_swing     # 双支撑结束,开始摆动
-        if ds_finished.any():
-            self.current_swing[ds_finished] = candidate[ds_finished]        # 当前摆动腿索引
-            self.has_swing[ds_finished] = True                              # 有摆动腿的环境
-            self.in_double_support[ds_finished] = False                     # 无双腿支撑的环境
-            self.swing_time[ds_finished] = 0.0                              # 摆动时间重置
-            self.ds_time[ds_finished] = 0.0                                 # 双腿支撑时间重置
-        
-        in_swing = self.has_swing                                           # 有摆动腿的环境
-        self.swing_time[in_swing] += self.dt                                # 摆动时间增加
-        swing_finished = in_swing &  (self.swing_time >= swing_duration)     # 摆动结束,开始双支撑
+        # ===== 3. swing状态机：去掉双支撑等待 =====
+        swing_duration = 0.1
+        start_swing = (~self.has_swing) & need_swing
+        if start_swing.any():
+            self.current_swing[start_swing] = candidate[start_swing]
+            self.has_swing[start_swing] = True
+            self.swing_time[start_swing] = 0.0
+        in_swing = self.has_swing
+        self.swing_time[in_swing] += self.dt
+        swing_finished = in_swing & (self.swing_time >= swing_duration)
         if swing_finished.any():
-            self.has_swing[swing_finished] = False                          # 摆动结束
-            self.in_double_support[swing_finished] = True                   # 进入双支撑状态
-            self.swing_time[swing_finished] = 0.0                           # 摆动时间重置
-            self.ds_time[swing_finished] = 0.0                              # 双支撑时间重置
-
+            self.has_swing[swing_finished] = False
+            self.swing_time[swing_finished] = 0.0
         # ===== 4. 输出 =====
         self.swing_mask.zero_()
         self.swing_mask[torch.arange(self.num_envs), self.current_swing] = self.has_swing.float()
         self.stance_mask = 1.0 - self.swing_mask
-        self.stance_mask[self.in_double_support] = 1.0
+        self.stance_mask[~self.has_swing] = 1.0
 
     # def _get_swing_stance_mask(self):
     #     # ===== 1. 接触检测 =====
     #     force_xy = torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2)
+    #     # print("contact_force:", force_xy[0])
     #     contact = force_xy > 20.0
-    #     stable = self.contact_history.sum(dim=2) >= 2
-    #     need_swing = contact.sum(dim=1) > 0
-    #     # ===== 2. 选候选腿：逻辑保持不变 =====
-    #     candidate = torch.argmax(force_xy, dim=1)           # 默认选水平接触力大的腿
-    #     one_contact = contact.sum(dim=1) == 1
+    #     stable = (self.contact_history.sum(dim=2) >= 2)     # 稳定接触（推荐 >=2 更鲁棒）
+    #     need_swing = contact.sum(dim=1) > 0                 # 是否需要抬腿（平地不抬）
+    #     # ===== 2. 选候选腿 =====
+    #     candidate = torch.argmax(force_xy, dim=1)           # 默认：接触力大的,return:0-left_leg,1-right_leg
+    #     one_contact = (contact.sum(dim=1) == 1)             # 如果单脚接触
     #     if one_contact.any():
-    #         candidate[one_contact] = torch.argmax(contact[one_contact].float(), dim=1,)
-    #     one_stable = stable.sum(dim=1) == 1
+    #         candidate[one_contact] = torch.argmax(contact[one_contact].float(), dim=1) # 抬单脚接触的那只脚
+    #     one_stable = (stable.sum(dim=1) == 1)               # 如果双脚接触 & 单脚稳定接触,选稳定接触的脚
     #     mask = (contact.sum(dim=1) == 2) & one_stable
     #     if mask.any():
-    #         candidate[mask] = torch.argmax(stable[mask].float(), dim=1,)
+    #         candidate[mask] = torch.argmax(stable[mask].float(), dim=1)
 
-    #     # ===== 3. 摆动状态机：无双支撑，每 0.1s 检测一次 =====
-    #     check_interval = 0.05
-    #     swing_duration = 0.2
-
-    #     not_swing = ~self.has_swing
-    #     self.swing_check_time[not_swing] += self.dt
-
-    #     check_ready = not_swing & (self.swing_check_time >= check_interval)
-    #     start_swing = check_ready & need_swing
-
-    #     if start_swing.any():
-    #         self.current_swing[start_swing] = candidate[start_swing]
-    #         self.has_swing[start_swing] = True
-    #         self.swing_time[start_swing] = 0.0
-
-    #     # 每次到检测周期都清零；即使没触发，也等下一个 0.1s 再检测
-    #     if check_ready.any():
-    #         self.swing_check_time[check_ready] = 0.0
-
-    #     in_swing = self.has_swing
-    #     self.swing_time[in_swing] += self.dt
-
-    #     swing_finished = in_swing & (self.swing_time >= swing_duration)
+    #     # ===== 3. swing状态机 =====
+    #     swing_duration = 0.2                                # 摆动周期
+    #     ds_duration = 0.1                                   # 双支撑时间
+    #     in_ds = self.in_double_support
+    #     self.ds_time[in_ds] += self.dt
+    #     ds_finished = in_ds & (self.ds_time >= ds_duration) & need_swing     # 双支撑结束,开始摆动
+    #     if ds_finished.any():
+    #         self.current_swing[ds_finished] = candidate[ds_finished]        # 当前摆动腿索引
+    #         self.has_swing[ds_finished] = True                              # 有摆动腿的环境
+    #         self.in_double_support[ds_finished] = False                     # 无双腿支撑的环境
+    #         self.swing_time[ds_finished] = 0.0                              # 摆动时间重置
+    #         self.ds_time[ds_finished] = 0.0                                 # 双腿支撑时间重置
+        
+    #     in_swing = self.has_swing                                           # 有摆动腿的环境
+    #     self.swing_time[in_swing] += self.dt                                # 摆动时间增加
+    #     swing_finished = in_swing &  (self.swing_time >= swing_duration)     # 摆动结束,开始双支撑
     #     if swing_finished.any():
-    #         self.has_swing[swing_finished] = False
-    #         self.swing_time[swing_finished] = 0.0
-    #         self.swing_check_time[swing_finished] = 0.0
+    #         self.has_swing[swing_finished] = False                          # 摆动结束
+    #         self.in_double_support[swing_finished] = True                   # 进入双支撑状态
+    #         self.swing_time[swing_finished] = 0.0                           # 摆动时间重置
+    #         self.ds_time[swing_finished] = 0.0                              # 双支撑时间重置
 
     #     # ===== 4. 输出 =====
     #     self.swing_mask.zero_()
     #     self.swing_mask[torch.arange(self.num_envs), self.current_swing] = self.has_swing.float()
     #     self.stance_mask = 1.0 - self.swing_mask
+    #     self.stance_mask[self.in_double_support] = 1.0
 
     def _update_contact_history(self):
         force_xy = torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2)
@@ -655,6 +639,38 @@ class L5A_2WHEEL(LeggedRobot):
         # return ang_vel_error
         return delta_phi / self.dt
     
+    def _reward_opposite_base_vel(self):
+        """
+        惩罚 base 在指令反方向运动
+        公式：max(0, -sgn(v_cmd) * v_x) * -40
+        """
+        v_cmd = self.commands[:, 0]   # x方向指令速度
+        v_x = self.base_lin_vel[:, 0] # base x方向实际速度
+        direction = torch.sign(v_cmd)
+        opposite_vel = torch.relu(-direction * v_x)
+        return opposite_vel
+    
+    def _reward_opposite_wheel_vel(self):
+        """
+        惩罚轮子在反方向旋转
+        公式：sum(max(0, -sgn(v_cmd) * wheel_vel)) * -2
+        """
+        v_cmd = self.commands[:, 0]  # x方向速度指令
+        wheel_vel = self.dof_vel[:, self.wheel_indices]  # (num_envs, 2)
+        direction = torch.sign(v_cmd)
+        # (num_envs, 2)
+        opposite_wheel_vel = torch.relu(-direction.unsqueeze(-1) * wheel_vel)
+        penalty = torch.sum(opposite_wheel_vel, dim=1)
+        return penalty
+    
+    def _reward_stuck(self):
+        v_cmd = self.commands[:, 0]
+        v_base = self.base_lin_vel[:, 0]
+        cmd_strength = torch.relu(torch.abs(v_cmd) - 0.3)
+        stuck_level = torch.relu(0.1 - torch.abs(v_base))
+        penalty = cmd_strength * stuck_level
+        return penalty
+    
     def _reward_base_height(self):
         # Penalize base height away from target
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
@@ -799,7 +815,6 @@ class L5A_2WHEEL(LeggedRobot):
         """
         # 获取足部垂直接触力
         # self.contact_forces 形状: (num_envs, num_bodies, 3)
-        # self.feet_indices 应该是包含左右足部索引的列表
         feet_z_forces = self.contact_forces[:, self.feet_indices, 2]  # Z轴力，形状: (num_envs, 2)
         # print("contact:", self.contact_forces[0, self.feet_indices])
         # print("feet_z_forces:", feet_z_forces[0])
@@ -814,7 +829,7 @@ class L5A_2WHEEL(LeggedRobot):
         return penalty
 
     def _reward_hip_pos(self):
-        hip_error = torch.sum(torch.square(self.dof_pos[:, [0,4]]), dim=1)
+        hip_error = torch.sum(torch.square(self.dof_pos[:, [0,4]] - self.default_dof_pos[:, [0,4]]), dim=1)
         rew_hip = hip_error
         return rew_hip
     

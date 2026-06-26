@@ -72,6 +72,9 @@ void RobotModel::Initialize() {
   R_BW = Eigen::Matrix3d::Identity();
   R_HB = Eigen::Matrix3d::Identity();
 
+  pos_left_wheel = Eigen::Vector3d::Zero(3);
+  pos_right_wheel = Eigen::Vector3d::Zero(3);
+
 #if SIM_ENABLE
   imu_ = std::make_unique<IMU>();
 #else
@@ -276,9 +279,11 @@ void RobotModel::UpdateKinematic() {
   pinocchio::centerOfMass(pino_model_, pino_data_, q_pino);
 
 
-  // int joint_id = pino_model_.getJointId("right_wheel_joint");
-  // Eigen::Vector3d pos = pino_data_.oMi[joint_id].translation();
-  // std::cout << "pos is: " << pos << std::endl;
+  int joint_id_left_wheel = pino_model_.getJointId("left_wheel_joint");
+  int joint_id_right_wheel = pino_model_.getJointId("right_wheel_joint");
+  pos_left_wheel = pino_data_.oMi[joint_id_left_wheel].translation();
+  pos_right_wheel = pino_data_.oMi[joint_id_right_wheel].translation();
+  // std::cout << "left_wheel_pos: " << pos_left_wheel << ", right_wheel_pos:" << pos_right_wheel << std::endl;
 
 
   // fixed model

@@ -61,18 +61,28 @@ void MyController(const mjModel* m, mjData* d) {
   robot_model.vel_x_des_ = 0.0;
   robot_model.vel_y_des_ = -0.0;
   robot_model.omega_des_ = 0.0;
+  robot_model.gait_enable_ = false;
   static double count_num = 0;
   static double count_num_plus = 0;
-  if(count_num > 2000 && count_num <= 8000){
-    robot_model.vel_x_des_ = 0.5;
-    robot_model.gait_enable_ = false;
+  if(count_num > 1000 && count_num <= 6000){
+    // robot_model.vel_x_des_ = 0.5;
+    // robot_model.omega_des_ = 0.5;
+    // robot_model.vel_y_des_ = 0.5;
+    robot_model.gait_enable_ = true;
     robot_model.phase_ = std::fmod(count_num_plus * 0.002, 0.8) / 0.8;
     count_num_plus++;
-  }else if(count_num > 8000){
-    robot_model.vel_x_des_ = -0.02;
-    robot_model.gait_enable_ = false;
-    robot_model.phase_ = 0;
-    count_num_plus = 0;
+  }else if(count_num > 6000 && count_num <= 9000){
+    robot_model.gait_enable_ = true;
+    robot_model.phase_ = std::fmod(count_num_plus * 0.002, 0.8) / 0.8;
+    count_num_plus++;
+    // count_num_plus = 0;
+  }else if(count_num > 9000 && count_num <= 14000){
+    // robot_model.vel_x_des_ = -0.5;
+    // robot_model.omega_des_ = -0.5;
+    // robot_model.vel_y_des_ = -0.5;
+    robot_model.gait_enable_ = true;
+    robot_model.phase_ = std::fmod(count_num_plus * 0.002, 0.8) / 0.8;
+    count_num_plus++;
   }
   count_num += 1;
  
@@ -104,9 +114,18 @@ void MyController(const mjModel* m, mjData* d) {
     d->ctrl[i] = tau_cmd[i];
     // d->ctrl[i] = tau_pure_ff[i];    // for rl pd paras selection
   }
+
+  int left_id  = mj_name2id(m, mjOBJ_SITE, "wheel_left_site");
+  int right_id = mj_name2id(m, mjOBJ_SITE, "wheel_right_site");
+  double z_left  = d->site_xpos[3*left_id + 2] - 0.127;
+  double z_right = d->site_xpos[3*right_id + 2] - 0.127;
+  // std::cout << "z_left:" << z_left << ",z_right:" << z_right << std::endl;
+
+
   // logfile << "t, vel_des, vel_act, w_des, w_act, zero, roll, pitch, height_target, height\n";
-  logfile << d->time << "," << robot_model.vel_x_des_ << "," << robot_model.qdot[0] << "," << robot_model.omega_des_ << "," << robot_model.qdot[5] << "," << 0 << "," << robot_model.q_rpy[3] << "," 
-  << robot_model.q_rpy[4] << "," << 0.643 << "," << robot_model.q_rpy[2] << "\n";
+  logfile << d->time << "," << robot_model.vel_x_des_ << "," << robot_model.qdot[0] << "," << robot_model.vel_y_des_ << "," << robot_model.qdot[1] << "," 
+  << robot_model.omega_des_ << "," << robot_model.qdot[5] << "," << 0 << "," << robot_model.q_rpy[3] << "," 
+  << robot_model.q_rpy[4] << "," << 0.643 << "," << robot_model.q_rpy[2] << "," << z_left << "," << z_right << "\n";
 
 }
 
@@ -625,7 +644,7 @@ int main(int argc, char** argv) {
   signal(SIGINT, exit_handler);
   signal(SIGTERM, exit_handler);
   logfile.open("log.csv");
-  logfile << "t, vel_des, vel_act, w_des, w_act, zero, roll, pitch, height_target, height\n";
+  logfile << "t, vel_x_des, vel_x_act, vel_y_des, vel_y_act, w_des, w_act, zero, roll, pitch, height_target, height, z_left, z_right\n";
   MujocoSimulator(argc, argv);
 
   return 0;

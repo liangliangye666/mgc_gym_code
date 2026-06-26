@@ -174,14 +174,14 @@ class Terrain:
         elif choice < self.proportions[2]:
             platform_surrounded_small_blocks_terrain(
                 terrain,
-                block_height=0.02 + difficulty * 0.2,
+                block_height=0.02 + difficulty * 0.15,
                 block_length=0.4,
                 block_width=0.4,
-                spacing_x=0.8,
+                spacing_x=1.5,
                 spacing_y=0.5,
                 platform_size=2.0,
-                y_jitter=0.2,
-                x_jitter=0.2,
+                y_jitter=0.1,
+                x_jitter=0.6,
             )
 
             num_goals = self.num_goals
@@ -230,7 +230,7 @@ class Terrain:
                     y_offset = 0.0
                 else:
                     side = np.random.choice([-1.0, 1.0])
-                    y_offset = side * np.random.uniform(0.5, 6.0)
+                    y_offset = side * np.random.uniform(1.0, 5.0) * (1 - difficulty)
                 y_rand = center_y + y_offset
                 terrain.goals[k] = [self.env_length / 2.0 + 5.0, y_rand, 0.2]
 

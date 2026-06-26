@@ -154,6 +154,9 @@ class RobotModel {
   Orientation ori_base_local_, ori_base_world_;
   Eigen::VectorXd observed_value;
 
+  Eigen::Vector3d pos_left_wheel;
+  Eigen::Vector3d pos_right_wheel;
+
  private:
   void AddFrames();
   void UpdateKinematic();

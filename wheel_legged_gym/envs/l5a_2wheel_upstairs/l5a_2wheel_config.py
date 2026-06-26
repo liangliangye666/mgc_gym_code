@@ -94,9 +94,9 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
 
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip_roll": 100, "hip_pitch": 100, "knee": 150, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip_roll": 80, "hip_pitch": 80, "knee": 80, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 3, "wheel": 1.5}  # [N*m*s/rad]
+        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 2, "wheel": 1.5}  # [N*m*s/rad]
 
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 4
@@ -151,7 +151,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
             # task related rewards
             # feet_air_time = 20
-            feet_contact_number = -5
+            feet_contact_number = -20
             wheel_all_air = -10
             feet_clearance = -20
             foot_landing_vel = -5
@@ -160,28 +160,32 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             # tracking related rewards
             tracking_goal = 10
             tracking_lin_vel_x = 5.0
-            # tracking_lin_vel_y = 1.0
+            tracking_lin_vel_y = 2.0
             tracking_ang_vel = 3.0
             tracking_lin_vel_pb = 1.0
             tracking_ang_vel_pb = 0.2
+            opposite_base_vel = -40
+            opposite_wheel_vel = -2
+            stuck = -30
 
             # regulation related rewards
             # nominal_foot_position = 4.0
-            leg_symmetry = 0.5
-            same_foot_x_position = -5 # 0.5
+            leg_symmetry = 1.0
+            same_foot_x_position = -20 # 0.5
+            hip_pos = -30
             # same_foot_z_position = -100
             lin_vel_z = -0.3
-            ang_vel_xy = -0.05
+            ang_vel_xy = -0.3
             torques = -0.00016
             dof_acc = -2.5e-7
-            action_rate = -0.001
+            action_rate = -0.01
             dof_pos_limits = -2.0
-            action_smooth = -0.001
+            action_smooth = -0.01
             orientation = -20.0
             feet_distance = -100
             base_height = -20
             # wheel_zero_velocity = 0.5
-            wheel_spin = -5
+            wheel_spin = -20
             feet_contact_forces = -5
             collision = -50.0
             keep_balance = 1

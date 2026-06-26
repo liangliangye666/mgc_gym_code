@@ -583,7 +583,8 @@ class LeggedRobot(BaseTask):
             forward = quat_apply(self.base_quat, self.forward_vec)
             heading = torch.atan2(forward[:, 1], forward[:, 0])
             # self.commands[:, 1] = torch.clip(1.5 * wrap_to_pi(self.commands[:, 3] - heading), -5, 5)
-            self.commands[:, 2] = torch.clip(0.5 * wrap_to_pi(self.target_yaw - heading), -1.0, 1.0)
+            self.commands[:, 2] = torch.clip(wrap_to_pi(self.target_yaw - heading), -0.5, 0.5)
+            # print("w:", self.commands[0, 2])
 
         if self.cfg.terrain.measure_heights:
             self.measured_heights = self._get_heights()

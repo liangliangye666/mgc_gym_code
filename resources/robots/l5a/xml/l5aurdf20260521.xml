@@ -35,62 +35,62 @@
     <geom name="down_slope" type="box" size="1 0.2 0.02" pos="2 0.2 0" euler="0 -0.1745 0" rgba="0.5 0.4 0.3 1"/> -->
             <!-- Step 1 -->
     <geom name="step1" type="box"
-          size="0.15 2.0 0.06"
-          pos="3.0 0.0 0.06"
+          size="0.15 2.0 0.075"
+          pos="3.0 0.0 0.075"
           rgba="0.5 0.4 0.3 1"/>
 
     <!-- Step 2 -->
     <geom name="step2" type="box"
-          size="0.15 2.0 0.06"
-          pos="3.3 0.0 0.18"
+          size="0.15 2.0 0.075"
+          pos="3.3 0.0 0.225"
           rgba="0.5 0.4 0.3 1"/>
 
     <!-- Step 3 -->
     <geom name="step3" type="box"
-          size="0.15 2.0 0.06"
-          pos="3.6 0.0 0.3"
+          size="0.15 2.0 0.075"
+          pos="3.6 0.0 0.375"
           rgba="0.5 0.4 0.3 1"/>
 
     <!-- Step 4 -->
     <geom name="step4" type="box"
-          size="0.15 2.0 0.06"
-          pos="3.9 0.0 0.42"
+          size="0.15 2.0 0.075"
+          pos="3.9 0.0 0.525"
           rgba="0.5 0.4 0.3 1"/>
 
     <!-- Step 5 -->
     <geom name="step5" type="box"
-          size="0.15 2.0 0.06"
-          pos="4.2 0.0 0.54"
+          size="0.15 2.0 0.075"
+          pos="4.2 0.0 0.675"
           rgba="0.5 0.4 0.3 1"/>
 
     <!-- Step 6 -->
     <geom name="step6" type="box"
           size="0.15 2.0 0.06"
-          pos="4.5 0.0 0.66"
+          pos="4.5 0.0 0.795"
           rgba="0.5 0.4 0.3 1"/>
   
     <!-- Step 7 -->
     <geom name="step7" type="box"
           size="0.15 2.0 0.06"
-          pos="4.8 0.0 0.78"
+          pos="4.8 0.0 0.915"
           rgba="0.5 0.4 0.3 1"/>
 
     <!-- Step 8 -->
     <geom name="step8" type="box"
           size="0.15 2.0 0.06"
-          pos="5.1 0.0 0.9"
+          pos="5.1 0.0 1.035"
           rgba="0.5 0.4 0.3 1"/>
     
     <!-- Step 9 -->
     <geom name="step9" type="box"
           size="0.15 2.0 0.06"
-          pos="5.4 0.0 1.02"
+          pos="5.4 0.0 1.155"
           rgba="0.5 0.4 0.3 1"/>
   
     <!-- Step 10 -->
     <geom name="step10" type="box"
           size="0.15 2.0 0.06"
-          pos="5.7 0.0 1.14"
+          pos="5.7 0.0 1.275"
           rgba="0.5 0.4 0.3 1"/>
 
     <body name="base_link">
