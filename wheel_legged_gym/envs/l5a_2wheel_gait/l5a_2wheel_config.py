@@ -59,7 +59,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         num_commands = 6 # 命令的数量
         class ranges: # 定义了每个命令可以取值的范围
             lin_vel_x = [-0.5, 0.5]     # min max [m/s],线速度命令范围
-            lin_vel_y = [-0.2, 0.2]
+            lin_vel_y = [-0.5, 0.5]
             ang_vel_yaw = [-0.5, 0.5]   # 角速度命令范围
             height = [0.643, 0.643]     # 高度范围上下浮动3cm
             heading = [-3.14, 3.14]     # 朝向范围
@@ -98,9 +98,9 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         action_scale_vel = 0.5
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip_roll": 200, "hip_pitch": 200, "knee": 250, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip_roll": 80, "hip_pitch": 80, "knee": 80, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 3, "wheel": 1.5}  # [N*m*s/rad]
+        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 2, "wheel": 1.5}  # [N*m*s/rad]
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 4
 
@@ -153,8 +153,8 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
 
             # tracking related rewards
-            tracking_lin_vel_x = 4.0
-            tracking_lin_vel_y = 1.0
+            tracking_lin_vel_x = 2.0
+            tracking_lin_vel_y = 2.0
             tracking_ang_vel = 2.0
             tracking_lin_vel_pb = 1.0
             tracking_ang_vel_pb = 0.2

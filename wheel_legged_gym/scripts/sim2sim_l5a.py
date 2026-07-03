@@ -46,7 +46,7 @@ class cmd:
     if robot_type == "l5a_2wheel_upstairs" or robot_type == "l5a_2wheel_upstairs_cp":
         vel_x = 0.5
     vel_y = 0.0
-    vel_yaw = 0.00
+    vel_yaw = -0.0
     height = 0.643
     heading = 0
 
@@ -301,8 +301,8 @@ if __name__ == "__main__":
         class robot_config:
             # kps = np.array([30, 50, 50, 0, 30, 50, 50, 0], dtype=np.double)
             # kds = np.array([3, 5, 5, 5, 3, 5, 5, 5], dtype=np.double)
-            kps = np.array([80, 80, 80, 0, 80, 80, 80, 0], dtype=np.double)
-            kds = np.array([2, 2, 2, 1.5, 2, 2, 2, 1.5], dtype=np.double)
+            kps = np.array([42, 42, 42, 0, 42, 42, 42, 0], dtype=np.double)
+            kds = np.array([2.5, 2.5, 2.5, 0.8, 2.5, 2.5, 2.5, 0.8], dtype=np.double)
             # tau_limit = np.array([300, 300, 60, 60, 300, 300, 60, 60], dtype=np.double)
             tau_limit = np.array([745, 745, 460, 400, 745, 745, 460, 400], dtype=np.double)
             # tau_limit = 800.0 * np.ones(8, dtype=np.double)  # 力矩限制

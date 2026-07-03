@@ -36,6 +36,7 @@ import isaacgym
 from wheel_legged_gym.envs import * # 导入所有任务的训练配置与训练方法类,导入后task_registry对象会包含所有训练任务的训练方法类/训练环境配置参数/训练算法配置参数
 from wheel_legged_gym.utils import get_args, task_registry # 导入task_registry对象
 import torch
+robot_type = os.getenv("ROBOT_TYPE")
 
 
 def train(args):
@@ -43,7 +44,8 @@ def train(args):
     ppo_runner, train_cfg = task_registry.make_alg_runner( # 创建rl训练算法执行器,返回训练算法执行器对象与训练算法配置参数
         env=env, name=args.task, args=args
     )
-    task_registry.save_cfgs(name=args.task) # 保存配置信息,其中base的配置与当前任务的配置都会保存
+    # cfg_save_name = robot_type if robot_type is not None else args.task
+    task_registry.save_cfgs(env_name= robot_type, task_name=args.task) # 保存配置信息,其中base的配置与当前任务的配置都会保存
     ppo_runner.learn( # 使用rl训练算法执行器开启训练
         num_learning_iterations=train_cfg.runner.max_iterations,
         init_at_random_ep_len=True,

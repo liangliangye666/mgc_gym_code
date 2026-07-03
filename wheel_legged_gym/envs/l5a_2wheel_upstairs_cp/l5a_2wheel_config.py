@@ -47,7 +47,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         num_rows = 10  # number of terrain rows (levels),地形网格的行数(难度级别)
         num_cols = 10  # number of terrain cols (types),地形网格的列数(类型)
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
-        terrain_proportions = [0.0, 0.0, 0.3, 0.0, 0.7, 0.0, 0.0, 0.0, 0.0] # 地形类型比例分布
+        terrain_proportions = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0] # 地形类型比例分布
         num_goals = 1
 
     class commands(LeggedRobotCfg.commands):
@@ -59,11 +59,12 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         heading_command = True  # if true: compute ang vel command from heading error,true:根据朝向误差计算角速度命令,false:轮差速计算角速度
         num_commands = 6 # 命令的数量
         class ranges: # 定义了每个命令可以取值的范围
-            lin_vel_x = [-1.0, 1.0]     # min max [m/s],线速度命令范围
+            lin_vel_x = [-0.6, 0.6]     # min max [m/s],线速度命令范围
             lin_vel_y = [-0.0, 0.0]
             ang_vel_yaw = [-0.5, 0.5]   # 角速度命令范围
             height = [0.643, 0.643]     # 高度范围上下浮动3cm
-            heading = [-3.14, 3.14]     # 朝向范围
+            # heading = [-3.14, 3.14]     # 朝向范围
+            heading = [-1.0, 1.0]     # 朝向范围
             mode_normalization = [0, 1] # 模式归一化,暂时两个模式-步态占比0.8,两轮平衡占比0.2
         gait_train_proportion = 0.8     # 训练步态的环境占比
         gait_foot_height = 0.207
@@ -94,9 +95,9 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
 
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip_roll": 80, "hip_pitch": 80, "knee": 80, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip_roll": 42, "hip_pitch": 42, "knee": 42, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 2, "wheel": 1.5}  # [N*m*s/rad]
+        damping = {"hip_roll": 2.5, "hip_pitch": 2.5, "knee": 2.5, "wheel": 0.8}  # [N*m*s/rad]
 
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 4
@@ -151,33 +152,34 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
             # task related rewards
             # feet_air_time = 20
-            feet_contact_number = -5
-            wheel_all_air = -10
+            feet_contact_number = -20
+            # wheel_all_air = -10
             feet_clearance = -20
             foot_landing_vel = -5
             swing_foot_lift = 5
 
             # tracking related rewards
-            tracking_goal = 1
-            tracking_lin_vel_x = 2.0
+            tracking_goal = 2
+            tracking_lin_vel_x = 1.5
             tracking_lin_vel_y = 1.0
             tracking_ang_vel = 2.0
             tracking_lin_vel_pb = 1.0
-            tracking_ang_vel_pb = 0.2
+            tracking_ang_vel_pb = 1.0
             opposite_base_vel = -40
-            opposite_wheel_vel = -2
+            opposite_wheel_vel = -10
             stuck = -30
 
             # regulation related rewards
             # nominal_foot_position = 4.0
             leg_symmetry = 1.0
-            same_foot_x_position = -20 # 0.5
-            hip_pos = -30
+            same_foot_x_position = -2 # 0.5
+            default_pos = -1
             # same_foot_z_position = -100
             lin_vel_z = -0.3
-            ang_vel_xy = -0.3
+            ang_vel_xy = -0.6
             torques = -0.00016
             dof_acc = -2.5e-7
+            # dof_vel = -1e-5
             action_rate = -0.01
             dof_pos_limits = -2.0
             action_smooth = -0.01
@@ -188,11 +190,11 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             wheel_spin = -20
             feet_contact_forces = -5
             collision = -50.0
-            keep_balance = 1
+            keep_balance = 0.15
 
         # 跟踪奖励的高斯分布参数 σ，跟踪奖励计算公式：exp(-error^2/sigma)
-        tracking_sigma = 0.25
-        ang_tracking_sigma = 0.25  # tracking reward = exp(-error^2/sigma)
+        tracking_sigma = 0.05
+        ang_tracking_sigma = 0.1  # tracking reward = exp(-error^2/sigma)
         nominal_foot_position_tracking_sigma = 0.005
         nominal_foot_position_tracking_sigma_wrt_v = 0.5
         leg_symmetry_tracking_sigma = 0.001
@@ -208,7 +210,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         # gait_force_sigma = 25.0
         # gait_vel_sigma = 0.25
         # gait_height_sigma = 0.005
-        feet_clearance_sigma = 0.0025
+        feet_clearance_sigma = 0.0004
         landing_height_threshold = 0.08
         landing_time_threshold = 0.12
         safe_landing_vel = 0.1

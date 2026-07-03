@@ -252,6 +252,7 @@ class L5A_2WHEEL(LeggedRobot):
         obs_buf = torch.cat(
             (
                 # self.base_lin_vel * self.obs_scales.lin_vel, # 3, 机器人base线速度
+                # self.yaw.unsqueeze(1),
                 self.base_ang_vel * self.obs_scales.ang_vel, # 3 ,机器人base角速度(在base坐标系)
                 self.projected_gravity, # 3 ,重力投影方向
                 self.commands[:, :4] * self.commands_scale,  # 4 , 外界命令
@@ -598,6 +599,10 @@ class L5A_2WHEEL(LeggedRobot):
         # Penalize dof accelerations
         return torch.sum(torch.square(self.dof_acc), dim=1)
 
+    def _reward_dof_vel(self):
+        # Penalize dof velocities
+        return torch.sum(torch.square(self.dof_vel[:, self.joint_indices]), dim=1)
+
     def _reward_action_rate(self):
         # Penalize changes in actions
         return torch.sum(torch.square(self.actions - self.last_actions[:, :, 0]), dim=1)
@@ -617,7 +622,10 @@ class L5A_2WHEEL(LeggedRobot):
     def _reward_tracking_lin_vel_x(self):
         # Tracking of linear velocity commands (xy axes)
         lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0])
-        return torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
+        ans = torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
+        # print("err:", lin_vel_error[0])
+        # print("ans:", ans[0])
+        return ans
 
     def _reward_tracking_lin_vel_y(self):
         # Tracking of linear velocity commands (xy axes)
@@ -631,13 +639,26 @@ class L5A_2WHEEL(LeggedRobot):
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw)
-        ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
-        return torch.exp(-ang_vel_error / self.cfg.rewards.ang_tracking_sigma)
+        ang_vel_error = torch.abs(self.commands[:, 2] - self.base_ang_vel[:, 2])
+        ans = torch.exp(-ang_vel_error / self.cfg.rewards.ang_tracking_sigma)
+        # print("cmd:", self.commands[0, 2])
+        # print("act:", self.base_ang_vel[0, 2])
+        # print("ans:", ans[0])
+        return ans
 
     def _reward_tracking_ang_vel_pb(self):
         delta_phi = ~self.reset_buf * (self._reward_tracking_ang_vel() - self.rwd_angVelTrackPrev)
         # return ang_vel_error
         return delta_phi / self.dt
+    
+    def _reward_tracking_ang_yaw(self):
+        # Tracking of angular velocity commands (yaw)
+        ang_error = torch.clip(wrap_to_pi(self.commands[:, 2] - self.yaw), -1.0, 1.0)
+        ans = torch.exp(-ang_error**2 / self.cfg.rewards.ang_tracking_sigma)
+        # print("cmd:", self.commands[0, 2])
+        # print("act:", self.yaw[0])
+        # print("ans:", ans[0])
+        return ans
     
     def _reward_opposite_base_vel(self):
         """
@@ -688,7 +709,7 @@ class L5A_2WHEEL(LeggedRobot):
         vel = self.root_states[:, 7:9]
         cmd = self.commands[:, 0]
         sign = torch.sign(cmd)
-        progress = self.total_learning_iteration / 20000
+        progress = self.total_learning_iteration / 10000
         decay = max(1.0-progress, 0.0)
         rew = sign * torch.sum(vel * direction, dim=-1) * decay
         # cmd_no_zero = (torch.abs(self.commands[:, 0]) > 1e-3).float()
@@ -809,8 +830,8 @@ class L5A_2WHEEL(LeggedRobot):
         penalty = torch.sum(normalized_excess, dim=1)  # 对两个足部求和
         return penalty
 
-    def _reward_hip_pos(self):
-        hip_error = torch.sum(torch.square(self.dof_pos[:, [0,4]] - self.default_dof_pos[:, [0,4]]), dim=1)
+    def _reward_default_pos(self):
+        hip_error = torch.sum(torch.square(self.dof_pos[:, self.cfg.asset.joint_indices] - self.default_dof_pos[:, self.cfg.asset.joint_indices]), dim=1)
         rew_hip = hip_error
         return rew_hip
     

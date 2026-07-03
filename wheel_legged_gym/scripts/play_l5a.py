@@ -41,7 +41,7 @@ import numpy as np
 import torch
 
 from tqdm import tqdm
-
+from isaacgym import gymapi
 
 def play(args):
     env_cfg, train_cfg = task_registry.get_cfgs(name=args.task)
@@ -116,15 +116,15 @@ def play(args):
     vel_cmd = torch.zeros(env.num_envs, device=env.device)
 
     for i in tqdm(range(stop_state_log)):
-
+        _set_wheel_contact_colors(env)
         if ppo_runner.alg.actor_critic.is_sequence:
             actions, latent = policy(obs, obs_history)
         else:
             actions = policy(obs.detach())
 
         env.commands[:, 0] = 0.0    # lin_vel_x
-        env.commands[:, 1] = 0      # lin_vel_y
-        env.commands[:, 2] = 0      # ang_vel
+        env.commands[:, 1] = 0.0      # lin_vel_y
+        # env.commands[:, 2] = 0      # ang_vel
         env.commands[:, 3] = 0.643  # height
         env.commands[:, 5] = 0.2    # gait_resample
         if robot_type == "l5a_2wheel_upstairs" or  robot_type == "l5a_2wheel_upstairs_cp":
@@ -216,6 +216,27 @@ def play(args):
     logger.print_rewards()
     logger.plot_states()
     input()
+
+def _set_wheel_contact_colors(env):
+    # threshold = 20
+    # forces = env.contact_forces[:, env.feet_indices, :]
+    # contact_xy = torch.norm(forces[:, :, :2], dim=-1)
+    # contacts = (contact_xy > threshold).detach().cpu()
+    # no_contact_color = gymapi.Vec3(1.0, 0.5, 0.0)
+    # contact_color = gymapi.Vec3(0.0, 1.0, 0.0)
+    swing_mask = (env.swing_mask > 0.5).detach().cpu()
+    stance_color = gymapi.Vec3(1.0, 0.5, 0.0)
+    swing_color = gymapi.Vec3(0.0, 1.0, 0.0)
+    for env_id in range(env.num_envs):
+        for wheel_id in range(len(env.feet_indices)):
+            color = swing_color if bool(swing_mask[env_id, wheel_id]) else stance_color
+            env.gym.set_rigid_body_color(
+                env.envs[env_id],
+                env.actor_handles[env_id],
+                int(env.feet_indices[wheel_id]),
+                gymapi.MESH_VISUAL,
+                color,
+            )
 
 
 if __name__ == "__main__":

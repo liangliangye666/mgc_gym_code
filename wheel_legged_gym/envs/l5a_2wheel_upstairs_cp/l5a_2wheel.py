@@ -412,7 +412,7 @@ class L5A_2WHEEL(LeggedRobot):
         if mask.any():
             candidate[mask] = torch.argmax(stable[mask].float(), dim=1)
         # ===== 3. swing状态机：去掉双支撑等待 =====
-        swing_duration = 0.1
+        swing_duration = 0.2
         start_swing = (~self.has_swing) & need_swing
         if start_swing.any():
             self.current_swing[start_swing] = candidate[start_swing]
@@ -598,6 +598,10 @@ class L5A_2WHEEL(LeggedRobot):
         # Penalize dof accelerations
         return torch.sum(torch.square(self.dof_acc), dim=1)
 
+    def _reward_dof_vel(self):
+        # Penalize dof velocities
+        return torch.sum(torch.square(self.dof_vel[:, self.joint_indices]), dim=1)
+
     def _reward_action_rate(self):
         # Penalize changes in actions
         return torch.sum(torch.square(self.actions - self.last_actions[:, :, 0]), dim=1)
@@ -631,8 +635,12 @@ class L5A_2WHEEL(LeggedRobot):
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw)
-        ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
-        return torch.exp(-ang_vel_error / self.cfg.rewards.ang_tracking_sigma)
+        ang_vel_error = torch.abs(self.commands[:, 2] - self.base_ang_vel[:, 2])
+        ans = torch.exp(-ang_vel_error / self.cfg.rewards.ang_tracking_sigma)
+        # print("cmd:", self.commands[0, 2])
+        # print("act:", self.base_ang_vel[0, 2])
+        # print("ans:", ans[0])
+        return ans
 
     def _reward_tracking_ang_vel_pb(self):
         delta_phi = ~self.reset_buf * (self._reward_tracking_ang_vel() - self.rwd_angVelTrackPrev)
@@ -688,7 +696,7 @@ class L5A_2WHEEL(LeggedRobot):
         vel = self.root_states[:, 7:9]
         cmd = self.commands[:, 0]
         sign = torch.sign(cmd)
-        progress = self.total_learning_iteration / 20000
+        progress = self.total_learning_iteration / 10000
         decay = max(1.0-progress, 0.0)
         rew = sign * torch.sum(vel * direction, dim=-1) * decay
         # cmd_no_zero = (torch.abs(self.commands[:, 0]) > 1e-3).float()
@@ -725,25 +733,6 @@ class L5A_2WHEEL(LeggedRobot):
         # Swing foot contact is bad mainly before it has lifted enough.
         swing_contact_penalty = self.swing_mask * soft_contact
         return torch.sum(swing_contact_penalty, dim=1)
-    
-    # def _reward_feet_clearance(self):
-    #     """
-    #     改进版：使用连续函数替代二值判断，提供更平滑的梯度。
-    #     """
-    #     foot_height = self.foot_positions[:, :, 2]
-    #     terrain_height = self._get_foot_heights()
-    #     clearance = foot_height - terrain_height - self.cfg.asset.wheel_radius
-    #     # print("foot_height:", foot_height[0])
-    #     # print("terrain_height:", terrain_height[0])
-    #     # print("clearance:", clearance[0])
-    #     h_min = 0.02
-    #     h_max = 0.05
-    #     inside = ((clearance > h_min) & (clearance < h_max)).float()
-    #     swing_mask = self.swing_mask  # (num_envs, 2)
-    #     # 3. 对所有腿的得分求和（鼓励所有摆动腿都达标）
-    #     total_reward = torch.sum(inside * swing_mask, dim=1)
-    #     # print("total_reward:", total_reward[0])
-    #     return total_reward
     
     def _reward_feet_clearance(self):
         foot_height = self.foot_positions[:, :, 2]
@@ -828,8 +817,8 @@ class L5A_2WHEEL(LeggedRobot):
         penalty = torch.sum(normalized_excess, dim=1)  # 对两个足部求和
         return penalty
 
-    def _reward_hip_pos(self):
-        hip_error = torch.sum(torch.square(self.dof_pos[:, [0,4]] - self.default_dof_pos[:, [0,4]]), dim=1)
+    def _reward_default_pos(self):
+        hip_error = torch.sum(torch.square(self.dof_pos[:, self.cfg.asset.joint_indices] - self.default_dof_pos[:, self.cfg.asset.joint_indices]), dim=1)
         rew_hip = hip_error
         return rew_hip
     

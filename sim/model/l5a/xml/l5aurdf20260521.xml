@@ -34,7 +34,7 @@
     <geom name="flat" type="box" size="1 0.2 0.02" pos="3.98 0.2 0.173" euler="0 0 0" rgba="0.5 0.4 0.3 1"/>
     <geom name="down_slope" type="box" size="1 0.2 0.02" pos="2 0.2 0" euler="0 -0.1745 0" rgba="0.5 0.4 0.3 1"/> -->
 
-    <!-- <geom name="step1" type="box"
+    <geom name="step1" type="box"
           size="0.15 2.0 0.06"
           pos="3.0 0.0 0.06"
           rgba="0.5 0.4 0.3 1"/>
@@ -82,7 +82,7 @@
     <geom name="step10" type="box"
           size="0.15 2.0 0.06"
           pos="5.7 0.0 1.14"
-          rgba="0.5 0.4 0.3 1"/> -->
+          rgba="0.5 0.4 0.3 1"/>
 
 
 

@@ -69,8 +69,8 @@ class LeggedRobotCfg(BaseConfig):
         selected = False  # select a unique terrain type and pass all arguments
         terrain_kwargs = None  # Dict of arguments for selected terrain
         max_init_terrain_level = 5  # starting curriculum state
-        terrain_length = 8.0
-        terrain_width = 8.0
+        terrain_length = 10.0
+        terrain_width = 10.0
         # trimesh only:
         slope_treshold = 0.1  # slopes above this threshold will be corrected to vertical surfaces
 
@@ -261,7 +261,7 @@ class LeggedRobotCfgPPO(BaseConfig):
         entropy_coef = 0.01
         num_learning_epochs = 5
         num_mini_batches = 4  # mini batch size = num_envs*nsteps / nminibatches
-        learning_rate = 1.0e-3  # 5.e-4
+        learning_rate = 1.0e-4  # 5.e-4
         schedule = "adaptive"  # could be adaptive, fixed
         gamma = 0.99
         lam = 0.95

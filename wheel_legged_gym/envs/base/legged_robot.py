@@ -582,9 +582,10 @@ class LeggedRobot(BaseTask):
         if self.cfg.commands.heading_command:
             forward = quat_apply(self.base_quat, self.forward_vec)
             heading = torch.atan2(forward[:, 1], forward[:, 0])
-            # self.commands[:, 1] = torch.clip(1.5 * wrap_to_pi(self.commands[:, 3] - heading), -5, 5)
-            self.commands[:, 2] = torch.clip(wrap_to_pi(self.target_yaw - heading), -0.5, 0.5)
-            # print("w:", self.commands[0, 2])
+            self.yaw = heading
+            # self.commands[:, 2] = torch.clip(1.5 * wrap_to_pi(self.commands[:, 4] - heading), -5, 5)
+            self.commands[:, 2] = torch.clip(2 * wrap_to_pi(self.target_yaw - heading), -1.0, 1.0)
+            # self.commands[:, 2] = self.commands[:, 4]
 
         if self.cfg.terrain.measure_heights:
             self.measured_heights = self._get_heights()
@@ -1170,6 +1171,7 @@ class LeggedRobot(BaseTask):
         )
         self.reach_goal_timer = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)   # 到达目标点计时器
         self.target_yaw = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)   # 目标点的yaw角度
+        self.yaw = torch.zeros(self.num_envs, dtype=torch.float, device=self.device, requires_grad=False)   # 机器人当前的yaw角度
         self.commands = torch.zeros( # 初始化命令张量,用于存储每个环境的控制指令,额外一列可能用于存储命令的持续时间或其他附加信息
             self.num_envs,
             self.cfg.commands.num_commands + 1,

@@ -532,6 +532,9 @@ class L5A_2WHEEL(LeggedRobot):
     def _reward_tracking_lin_vel_y(self):
         # Tracking of linear velocity commands (xy axes)
         lin_vel_error = torch.square(self.commands[:, 1] - self.base_lin_vel[:, 1])
+        # print("lin_err:", lin_vel_error[0])
+        ans = torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
+        # print("ans:", ans[0])
         return torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
 
     def _reward_tracking_lin_vel_pb(self):
