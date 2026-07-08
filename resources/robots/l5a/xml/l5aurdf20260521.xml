@@ -65,32 +65,32 @@
 
     <!-- Step 6 -->
     <geom name="step6" type="box"
-          size="0.15 2.0 0.07"
-          pos="4.5 0.0 0.57"
+          size="0.15 2.0 0.05"
+          pos="4.5 0.0 0.55"
           rgba="0.5 0.4 0.3 1"/>
   
     <!-- Step 7 -->
     <geom name="step7" type="box"
-          size="0.15 2.0 0.07"
-          pos="4.8 0.0 0.71"
+          size="0.15 2.0 0.05"
+          pos="4.8 0.0 0.65"
           rgba="0.5 0.4 0.3 1"/>
 
     <!-- Step 8 -->
     <geom name="step8" type="box"
-          size="0.15 2.0 0.07"
-          pos="5.1 0.0 0.85"
+          size="0.15 2.0 0.05"
+          pos="5.1 0.0 0.75"
           rgba="0.5 0.4 0.3 1"/>
     
     <!-- Step 9 -->
     <geom name="step9" type="box"
-          size="0.15 2.0 0.07"
-          pos="5.4 0.0 0.99"
+          size="0.15 2.0 0.05"
+          pos="5.4 0.0 0.85"
           rgba="0.5 0.4 0.3 1"/>
   
     <!-- Step 10 -->
     <geom name="step10" type="box"
-          size="0.15 2.0 0.07"
-          pos="5.7 0.0 1.13"
+          size="0.15 2.0 0.05"
+          pos="5.7 0.0 0.95"
           rgba="0.5 0.4 0.3 1"/>
 
     <body name="base_link">

@@ -69,8 +69,8 @@ class LeggedRobotCfg(BaseConfig):
         selected = False  # select a unique terrain type and pass all arguments
         terrain_kwargs = None  # Dict of arguments for selected terrain
         max_init_terrain_level = 5  # starting curriculum state
-        terrain_length = 10.0
-        terrain_width = 10.0
+        terrain_length = 8.0
+        terrain_width = 8.0
         # trimesh only:
         slope_treshold = 0.1  # slopes above this threshold will be corrected to vertical surfaces
 

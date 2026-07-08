@@ -37,7 +37,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
     class env(LeggedRobotCfg.env):
         num_actions = 8 # 每个环境中机器人的动作空间维度,通常对应于机器人的关节数量
         num_observations = 3 + 3 + 4 + 6 + num_actions*2  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
-        num_privileged_obs = 3 + num_observations + 7 * 11 + 2 + 2 + 6 + 7# 特权观测,评论家网络输入
+        num_privileged_obs = 3 + num_observations + 7 * 11 + 2 + 2 + 6 + 6# 特权观测,评论家网络输入
         obs_history_length = 10  # number of observations stacked together,状态观测历史堆叠的长度
         obs_history_dec = 1 # 状态历史堆叠的衰减参数,当前时刻权重最高,这里设置为1说明没有衰减
 
@@ -47,7 +47,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         num_rows = 10  # number of terrain rows (levels),地形网格的行数(难度级别)
         num_cols = 10  # number of terrain cols (types),地形网格的列数(类型)
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
-        terrain_proportions = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0] # 地形类型比例分布
+        terrain_proportions = [0.0, 0.0, 0.3, 0.0, 0.7, 0.0, 0.0, 0.0, 0.0] # 地形类型比例分布
         num_goals = 1
 
     class commands(LeggedRobotCfg.commands):
@@ -136,7 +136,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         clip_actions = 100.0 # 动作剪裁
 
     class noise(LeggedRobotCfg.noise):
-        add_noise = True
+        add_noise = False
         noise_level = 1.5
 
         class noise_scales(LeggedRobotCfg.noise.noise_scales): # 噪声缩放因子
@@ -152,23 +152,26 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
             # task related rewards
             # feet_air_time = 20
-            feet_contact_number = -5
+            feet_contact_number = 1
             # wheel_all_air = -10
-            feet_clearance = -5
+            feet_clearance = -100
             foot_landing_vel = -5
             swing_foot_lift = 5
+            triggered_leg_up_vel = 8.0
+            wrong_leg_lift = -20.0
+            triggered_leg_action_dir = 2.0
 
             # tracking related rewards
-            tracking_goal = 5
+            tracking_goal = 2
             tracking_lin_vel_x = 1.5
             tracking_lin_vel_y = 1.0
             tracking_ang_vel = 3.0
             # tracking_ang_yaw = 1.0
             tracking_lin_vel_pb = 1.0
             tracking_ang_vel_pb = 1.0
-            opposite_base_vel = -40
-            opposite_wheel_vel = -5
-            # stuck = -30
+            opposite_base_vel = -4
+            opposite_wheel_vel = -0.5
+            stuck = -30
 
             # regulation related rewards
             # nominal_foot_position = 4.0
@@ -177,21 +180,22 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             default_pos = -1
             # same_foot_z_position = -100
             lin_vel_z = -0.3
-            ang_vel_xy = -0.6
+            ang_vel_xy = -0.03
             torques = -0.00016
             dof_acc = -2.5e-7
             # dof_vel = -1e-5
             action_rate = -0.01
             dof_pos_limits = -2.0
             action_smooth = -0.01
-            orientation = -20.0
-            feet_distance = -20
-            base_height = -20
+            orientation = -12.0
+            feet_distance = -10
+            base_height = -10
             # wheel_zero_velocity = 0.5
-            wheel_spin = -20
+            wheel_spin = -50
+            blocked_wheel_vel = -20
             feet_contact_forces = -5
             collision = -50.0
-            keep_balance = 0.15
+            keep_balance = 1
 
         # 跟踪奖励的高斯分布参数 σ，跟踪奖励计算公式：exp(-error^2/sigma)
         tracking_sigma = 0.05
@@ -211,7 +215,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         # gait_force_sigma = 25.0
         # gait_vel_sigma = 0.25
         # gait_height_sigma = 0.005
-        feet_clearance_sigma = 0.0025
+        feet_clearance_sigma = 0.01
         landing_height_threshold = 0.08
         landing_time_threshold = 0.12
         safe_landing_vel = 0.1

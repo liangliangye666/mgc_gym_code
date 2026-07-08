@@ -56,6 +56,7 @@ def play(args):
         env_cfg.terrain.mesh_type = "plane"
     env_cfg.terrain.num_rows = 10
     env_cfg.terrain.num_cols = 10
+    env_cfg.terrain.terrain_proportions = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0] # 地形类型比例分布
     env_cfg.terrain.max_init_terrain_level = env_cfg.terrain.num_rows - 1
     env_cfg.terrain.curriculum = True
     env_cfg.noise.add_noise = False

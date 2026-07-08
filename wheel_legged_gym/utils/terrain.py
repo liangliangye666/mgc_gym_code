@@ -144,10 +144,16 @@ class Terrain:
         )
         slope = difficulty * 0.5                                # 斜率
         random_height = 0.02 + difficulty * 0.2                 # 随机高度
-        step_height = 0.025 + 0.15 * difficulty                 # 台阶高度
-        step_width = 0.6 - 0.4 * difficulty                    # 台阶宽度
-        if difficulty >= 0.4:
-            step_width = 0.3                                    # 台阶宽度
+        # if difficulty <= 0.4:
+        #     step_height = 0.05                                    # 台阶宽度
+        #     step_width = 0.6 - 0.5 * difficulty                    # 台阶宽度
+        # else:
+        #     step_height = 0.05 + 0.2 * (difficulty - 0.4)                 # 台阶高度
+        #     step_width = 0.3                                    # 台阶宽度
+        step_height = 0.02 + 0.1 * difficulty                   # 台阶高度
+        step_width = 0.72 - 0.4 * difficulty                    # 台阶宽度
+        # if difficulty >= 0.4:
+        #     step_width = 0.3                                    # 台阶宽度
         discrete_obstacles_height = 0.02 + difficulty * 0.2     # 离散障碍物高度
         stepping_stones_size = 1.5 * (1.05 - difficulty)        # 石头尺寸
         stone_distance = 0.05 if difficulty == 0 else 0.1       # 石头距离
@@ -176,7 +182,7 @@ class Terrain:
         elif choice < self.proportions[2]:
             platform_surrounded_small_blocks_terrain(
                 terrain,
-                block_height=0.02 + difficulty * 0.15,
+                block_height=0.02 + difficulty * 0.1,
                 block_length=0.4,
                 block_width=0.4,
                 spacing_x=1.5,
@@ -188,9 +194,9 @@ class Terrain:
 
             num_goals = self.num_goals
             terrain.goals = np.zeros((num_goals, 3))
-            terrain.step_height = 0.02 + difficulty * 0.12
+            terrain.step_height = 0.02 + difficulty * 0.1
             for k in range(num_goals):
-                terrain.goals[k] = [15.0, self.env_width / 2.0, 0.2]
+                terrain.goals[k] = [self.env_length * 1.5, self.env_width / 2.0, 0.2]
         elif choice < self.proportions[3]:
             if (
                 choice
@@ -232,7 +238,7 @@ class Terrain:
                     y_offset = 0.0
                 else:
                     side = np.random.choice([-1.0, 1.0])
-                    y_offset = side * np.random.uniform(1.0, 5.0) * (1 - difficulty)
+                    y_offset = side * np.random.uniform(2.0, 8.0) * (1 - difficulty)
                 y_rand = center_y + y_offset
                 terrain.goals[k] = [self.env_length * 1.5, y_rand, 0.2]
 
@@ -300,6 +306,7 @@ class Terrain:
         self.env_origins[i, j] = [env_origin_x, env_origin_y, env_origin_z]
         self.goals[i, j, :, :3] = terrain.goals + [i * self.env_length, j * self.env_width, 0]             # 把子地形goals映射到世界坐标,第i,j个环境的所有目标点的x,y值
         # print("terrain_goals:", terrain.goals)
+        # print("goals:", self.goals)
         self.terrain_step_height[i, j] = terrain.step_height
         # print("step:", self.terrain_step_height[i, j])
 
