@@ -172,7 +172,7 @@ class LeggedRobotCfg(BaseConfig):
         randomize_obs_delay = False # 是否随机化观测值反馈的延迟
         obs_delay_range = [0, 30]
 
-        randomize_imu_offset = True
+        randomize_imu_offset = False
         randomize_imu_offset_range = [-1.2, 1.2]
 
     class rewards:

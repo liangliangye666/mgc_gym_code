@@ -48,6 +48,7 @@ JoyStick::JoyStick() {
 }
 
 JoyStick::~JoyStick() {
+  RuntimeFlags::instance().stop();
   if (gamepad_thread_.joinable()) {
     gamepad_thread_.join();
   }

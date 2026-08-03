@@ -29,6 +29,7 @@
 
 
 import math
+import os
 import numpy as np
 import mujoco
 import mujoco_viewer
@@ -111,7 +112,7 @@ def initialize_qpos(model, data):
         # data.qpos = np.array([0, 0, 0.477, 0.707, 0.0, 0.0, 0.707, 0, 0, 0, 0, 0, 0, 0, 0], dtype=np.double)
 
 
-def run_mujoco(policy, cfg):
+def run_mujoco(policy, estimator, cfg):
     """
     Run the Mujoco simulation using the provided policy and configuration.
 
@@ -156,12 +157,12 @@ def run_mujoco(policy, cfg):
 
     count_lowlevel = 0
 
-    obs_history_length = cfg.env.obs_history_length
+    obs_history = None
 
     for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
 
         # Obtain an observation
-        q, dq, quat, v, omega, gvec = get_obs(data)
+        q, dq, quat, _v, omega, gvec = get_obs(data)
         # right_hip_joint right_knee_joint rf_wheel_joint rb_wheel_joint
         # left_hip_joint left_knee_joint lf_wheel_joint lb_wheel_joint
         q = q[-cfg.env.num_actions :]
@@ -212,13 +213,20 @@ def run_mujoco(policy, cfg):
 
         obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
 
-        policy_input = np.zeros([1, cfg.env.num_observations + 3], dtype=np.float32)
+        if obs_history is None:
+            obs_history = np.tile(obs, (1, cfg.env.obs_history_length))
+        else:
+            obs_history = np.hstack((obs_history[:, cfg.env.num_observations :], obs))
 
-        policy_input = np.hstack((obs, v.reshape(1, -1) * cfg.normalization.obs_scales.lin_vel))
+        obs_tensor = torch.tensor(obs, dtype=torch.float32)
+        obs_history_tensor = torch.tensor(obs_history, dtype=torch.float32)
 
         # left_hip_joint left_knee_joint lb_wheel_joint lf_wheel_joint
         # right_hip_joint right_knee_joint rb_wheel_joint rf_wheel_joint
-        action[:] = policy(torch.tensor(policy_input, dtype=torch.float32))[0].detach().numpy()
+        with torch.no_grad():
+            latent = estimator(obs_history_tensor)
+            policy_input = torch.cat((obs_tensor, latent), dim=-1)
+            action[:] = policy(policy_input)[0].detach().numpy()
         action = np.clip(action, -cfg.normalization.clip_actions, cfg.normalization.clip_actions)
 
         # print("action:", action)
@@ -247,6 +255,12 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Deployment script.")
     parser.add_argument("--load_model", type=str, required=True, help="Run to load from.")
+    parser.add_argument(
+        "--load_estimator",
+        type=str,
+        default=None,
+        help="Path to estimator.pt. Defaults to estimator.pt next to --load_model.",
+    )
     parser.add_argument("--terrain", action="store_true", help="terrain or plane")
     args = parser.parse_args()
 
@@ -268,5 +282,16 @@ if __name__ == "__main__":
             tau_limit = np.array([745, 880, 460, 460, 745, 880, 460, 460], dtype=np.double)
             # tau_limit = 800.0 * np.ones(8, dtype=np.double)  # 力矩限制
 
+    estimator_path = args.load_estimator
+    if estimator_path is None:
+        estimator_path = os.path.join(os.path.dirname(args.load_model), "estimator.pt")
+    if not os.path.exists(estimator_path):
+        raise FileNotFoundError(
+            f"Estimator not found: {estimator_path}. Pass --load_estimator /path/to/estimator.pt."
+        )
+
     policy = torch.jit.load(args.load_model)
-    run_mujoco(policy, Sim2simCfg())
+    estimator = torch.jit.load(estimator_path)
+    policy.eval()
+    estimator.eval()
+    run_mujoco(policy, estimator, Sim2simCfg())

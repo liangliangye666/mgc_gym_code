@@ -20,5 +20,6 @@ setup(
         "tqdm",
         "mujoco",
         "mujoco-python-viewer",
+        "pygame",
     ],
 )

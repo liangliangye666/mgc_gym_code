@@ -39,15 +39,15 @@ from wheel_legged_gym import WHEEL_LEGGED_GYM_ROOT_DIR # 导入自定义路径�
 from wheel_legged_gym.envs import L5A_2WHEEL_Cfg # 导入机器人环境配置类作为父类
 from wheel_legged_gym.envs import robot_type
 import torch # 导入PyTorch深度学习框架,构建神经网络策略(如Actor-Critic架构),自动求导训练强化学习模型,GPU加速仿真数据处理(如状态特征提取)
-
+from wheel_legged_gym.utils.handle import JoystickCommandSource
 
 class cmd:
     vel_x = 0.0
     if robot_type == "l5a_2wheel_upstairs" or robot_type == "l5a_2wheel_upstairs_cp":
-        vel_x = 0.5
+        vel_x = 0.8
     vel_y = 0.0
     vel_yaw = -0.0
-    height = 0.643
+    height = 0.6447
     heading = 0
 
 
@@ -139,7 +139,7 @@ def initialize_qpos(model, data):
     data.qpos = model.key_qpos
 
 
-def run_mujoco(policy, cfg):
+def run_mujoco(policy, estimator, cfg):
     """
     Run the Mujoco simulation using the provided policy and configuration.
 
@@ -185,7 +185,7 @@ def run_mujoco(policy, cfg):
     action = np.zeros((cfg.env.num_actions), dtype=np.double)
 
     count_lowlevel = 0
-
+    obs_history = None
 
     for _ in tqdm(range(int(cfg.sim_config.sim_duration / cfg.sim_config.dt)), desc="Simulating..."):
         if robot_type == "l5a_2wheel_gait" or robot_type == "l5a_2wheel_gait_cp":
@@ -198,21 +198,22 @@ def run_mujoco(policy, cfg):
                 gait_enable = 0
         # Obtain an observation
         q, dq, quat, v, omega, gvec = get_obs(data) # 获取17+16+4+3+3+3=46维的观测量
-
-        # without yaw
-        base_euler_zyx = get_euler_zyx_tensor(quat)
-        base_euler_zyx_local = base_euler_zyx
-        base_euler_zyx_local[2] = 0
-        base_quat_local = quat_from_euler_zyx(base_euler_zyx_local)
-
-        # right_hip_joint right_knee_joint rf_wheel_joint rb_wheel_joint
-        # left_hip_joint left_knee_joint lf_wheel_joint lb_wheel_joint
         q = q[-cfg.env.num_actions :] # q和dq都取后面6个关节相关的值
-        # print("q:", q)
         dq = dq[-cfg.env.num_actions :]
 
         # 1000hz -> 100hz
         if count_lowlevel % cfg.sim_config.decimation == 0:
+
+            joystick_source = getattr(cfg, "joystick_source", None)
+            if joystick_source is not None:
+                joystick_cmd = joystick_source.read_command(cfg.sim_config.dt * cfg.sim_config.decimation)
+                vel_x = float(joystick_cmd[0])
+                vel_y = float(joystick_cmd[1])
+                vel_yaw = float(joystick_cmd[2])
+            else:
+                vel_x = cmd.vel_x
+                vel_y = cmd.vel_y
+                vel_yaw = cmd.vel_yaw
 
             obs = np.zeros([1, cfg.env.num_observations + 3], dtype=np.float32) # 观测值数量42 + 3
             # eu_ang = quaternion_to_euler_array(quat)
@@ -223,9 +224,9 @@ def run_mujoco(policy, cfg):
             obs[0, 0:3] = omega * cfg.normalization.obs_scales.ang_vel
             obs[0, 3:6] = gvec
             
-            obs[0, 6] = cmd.vel_x * cfg.normalization.obs_scales.lin_vel
-            obs[0, 7] = cmd.vel_y * cfg.normalization.obs_scales.lin_vel_y
-            obs[0, 8] = cmd.vel_yaw * cfg.normalization.obs_scales.ang_vel
+            obs[0, 6] = vel_x * cfg.normalization.obs_scales.lin_vel
+            obs[0, 7] = vel_y * cfg.normalization.obs_scales.lin_vel_y
+            obs[0, 8] = vel_yaw * cfg.normalization.obs_scales.ang_vel
             obs[0, 9] = cmd.height * cfg.normalization.obs_scales.height_measurements
 
             obs[0, 10:16] = (q[cfg.asset.joint_indices] - default_q[cfg.asset.joint_indices]) * cfg.normalization.obs_scales.dof_pos
@@ -246,12 +247,24 @@ def run_mujoco(policy, cfg):
                 obs[0, 38] = 0.1
 
 
-            obs[0,-3:]=v * cfg.normalization.obs_scales.lin_vel
+            # obs[0,-3:]=v * cfg.normalization.obs_scales.lin_vel
+            proprio_obs = obs[:, :cfg.env.num_observations]
+            if obs_history is None:
+                obs_history = np.tile(proprio_obs,(1, cfg.env.obs_history_length))
+            else:
+                obs_history = np.hstack((obs_history[:, cfg.env.num_observations:], proprio_obs))
+            with torch.no_grad():
+                latent = estimator(torch.tensor(obs_history, dtype=torch.float32))
+            obs[0, -3:] = latent[0].detach().numpy()
+            # print("vel_cmd:", vel_x * cfg.normalization.obs_scales.lin_vel)
+            # print("act:", v * cfg.normalization.obs_scales.lin_vel)
+            # print("vel_cmd:", vel_x)
+            # print("act:", v)
+            # print("est:", obs[0, -3:])
 
             obs = np.clip(obs, -cfg.normalization.clip_observations, cfg.normalization.clip_observations)
 
             policy_input = np.zeros([1, cfg.env.num_observations + 3], dtype=np.float32)
-
             policy_input = obs
             # print("policy_input: ", policy_input)
             # left_hip_joint left_knee_joint fl_wheel_joint rl_wheel_joint
@@ -263,6 +276,7 @@ def run_mujoco(policy, cfg):
 
         target_q[[0, 1, 2, 4, 5, 6]] = action[[0, 1, 2, 4, 5, 6]] * cfg.control.action_scale_pos
         target_dq[[3, 7]] = action[[3, 7]] * cfg.control.action_scale_vel
+        print("action:", action[[3, 7]])
 
         # Generate PD control
         tau = pd_control(target_q,default_q, q, cfg.robot_config.kps, target_dq, dq, cfg.robot_config.kds)  # Calc torques
@@ -285,27 +299,40 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Deployment script.") # 创建命令行参数解析器
     parser.add_argument("--load_model", type=str, required=True, help="Run to load from.") # 指定参数类型为字符串,此参数必须提供,帮助信息说明参数用途
+    parser.add_argument("--load_estimator", type=str, required=True, help="Run to estimator vel")
     parser.add_argument("--terrain", action="store_true", help="terrain or plane") # 如果命令行中包含此参数,则值为True,否则为False,帮助信息说明地形
     args = parser.parse_args() # 解析命令行传入的参数,并将结果存储在args对象中
 
     class Sim2simCfg(L5A_2WHEEL_Cfg): # 定义仿真配置类,继承自基础配置
-
         class sim_config:
             if args.terrain:
                 mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l2c/mjcf/y1a-terrain.xml"
             else:
                 mujoco_model_path = f"{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/xml/l5aurdf20260521.xml"
-            sim_duration = 100.0
+            sim_duration = 500.0
             dt = 0.005
             decimation = 4
+            use_joystick = True
+            joystick_index = 0
+            joystick_debug = False
         class robot_config:
-            # kps = np.array([30, 50, 50, 0, 30, 50, 50, 0], dtype=np.double)
-            # kds = np.array([3, 5, 5, 5, 3, 5, 5, 5], dtype=np.double)
+            # kps = np.array([84, 84, 84, 0, 84, 84, 84, 0], dtype=np.double)
+            # kds = np.array([2.5, 2.5, 2.5, 0.8, 2.5, 2.5, 2.5, 0.8], dtype=np.double)
             kps = np.array([42, 42, 42, 0, 42, 42, 42, 0], dtype=np.double)
             kds = np.array([2.5, 2.5, 2.5, 0.8, 2.5, 2.5, 2.5, 0.8], dtype=np.double)
-            # tau_limit = np.array([300, 300, 60, 60, 300, 300, 60, 60], dtype=np.double)
+            # kps = np.array([200, 200, 250, 0, 200, 200, 250, 0], dtype=np.double)
+            # kds = np.array([2, 2, 2, 1.5, 2, 2, 2, 1.5], dtype=np.double)
             tau_limit = np.array([745, 745, 460, 400, 745, 745, 460, 400], dtype=np.double)
-            # tau_limit = 800.0 * np.ones(8, dtype=np.double)  # 力矩限制
+
+        joystick_source = None
+        if getattr(sim_config, "use_joystick", False):
+            import pygame
+            joystick_source = JoystickCommandSource(
+                pygame,
+                sim_config.joystick_index,
+                sim_config.joystick_debug,
+            )
 
     policy = torch.jit.load(args.load_model)
-    run_mujoco(policy, Sim2simCfg())
+    estimator = torch.jit.load(args.load_estimator)
+    run_mujoco(policy, estimator, Sim2simCfg())

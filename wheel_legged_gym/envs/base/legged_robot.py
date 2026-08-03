@@ -896,7 +896,7 @@ class LeggedRobot(BaseTask):
             self.root_states[env_ids] = self.base_init_state
             self.root_states[env_ids, :3] += self.env_origins[env_ids]
             self.root_states[env_ids, :2] += torch_rand_float(
-                -0.7, 0.7, (len(env_ids), 2), device=self.device
+                -1.0, 1.0, (len(env_ids), 2), device=self.device
             )  # xy position within 1m of the center
         else:
             self.root_states[env_ids] = self.base_init_state
@@ -1051,6 +1051,9 @@ class LeggedRobot(BaseTask):
 
         # 更新上一时刻的关节位置
         self.last_dof_pos[:] = self.dof_pos[:]
+
+    def update_contact_forces(self):
+        self.gym.refresh_net_contact_force_tensor(self.sim)
 
     def _init_buffers(self):
         """Initialize torch tensors which will contain simulation states and processed quantities""" # 定义初始化缓冲区的函数,这些缓冲区用于存储仿真状态和处理后的数据
@@ -1267,6 +1270,11 @@ class LeggedRobot(BaseTask):
         self.measured_heights = 0
         # self.base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1) # base高度
 
+        self.action_scale = torch.tensor(
+            self.cfg.control.action_scale,
+            device=self.device,
+            dtype=torch.float,
+        )
         # joint positions offsets and PD gains
         self.raw_default_dof_pos = torch.zeros( # 初始化默认关节位置,单个环境
             self.num_dof,

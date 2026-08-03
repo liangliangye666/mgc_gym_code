@@ -117,7 +117,8 @@ def play(args):
     vel_cmd = torch.zeros(env.num_envs, device=env.device)
 
     for i in tqdm(range(stop_state_log)):
-        _set_wheel_contact_colors(env)
+        if robot_type == "l5a_2wheel_upstairs" or  robot_type == "l5a_2wheel_upstairs_cp":
+            _set_wheel_contact_colors(env)
         if ppo_runner.alg.actor_critic.is_sequence:
             actions, latent = policy(obs, obs_history)
         else:

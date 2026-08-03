@@ -86,11 +86,11 @@ void setMotorParameters(standmode_output_t* standmode_output, standmode_input_t*
   standmode_output->joints_cmd.joint_h_roll_l.operation_mode = 11;
   standmode_output->joints_cmd.joint_h_pitch_l.operation_mode = 11;
   standmode_output->joints_cmd.joint_k_pitch_l.operation_mode = 11;
-  standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 11;
+  standmode_output->joints_cmd.joint_w_pitch_l.operation_mode = 4;
   standmode_output->joints_cmd.joint_h_roll_r.operation_mode = 11;
   standmode_output->joints_cmd.joint_h_pitch_r.operation_mode = 11;
   standmode_output->joints_cmd.joint_k_pitch_r.operation_mode = 11;
-  standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 11;
+  standmode_output->joints_cmd.joint_w_pitch_r.operation_mode = 4;
 }
 
 void setEmergencyParameters(standmode_output_t* standmode_output, standmode_input_t* standmode_input) {
@@ -147,12 +147,12 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
   pos_fb_kd = fsm.pos_fb_kd_;                     //获取各关节位置误差kd参数
   // pos_cmd << 0, 0.261799, -0.508606, 0.0, 0, 0.261799, -0.508606, 0.0;
 
-  robot_model.observed_value[14] = tau_cmd[0];     //观测力矩值
-  robot_model.observed_value[15] = tau_cmd[1];
-  robot_model.observed_value[16] = tau_cmd[2];
-  robot_model.observed_value[17] = tau_cmd[3];
-  robot_model.observed_value[18] = tau_cmd[4];
-  robot_model.observed_value[19] = tau_cmd[5];
+  // robot_model.observed_value[14] = tau_cmd[0];     //观测力矩值
+  // robot_model.observed_value[15] = tau_cmd[1];
+  // robot_model.observed_value[16] = tau_cmd[2];
+  // robot_model.observed_value[17] = tau_cmd[3];
+  // robot_model.observed_value[18] = tau_cmd[4];
+  // robot_model.observed_value[19] = tau_cmd[5];
 
   standmode_output->joints_cmd.joint_h_roll_l.KP = pos_fb_kp[static_cast<int>(l5a::Joints::left_hip_roll_joint)];
   standmode_output->joints_cmd.joint_h_pitch_l.KP = pos_fb_kp[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
@@ -178,25 +178,35 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
   standmode_output->joints_cmd.joint_h_roll_r.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::right_hip_roll_joint)];
   standmode_output->joints_cmd.joint_h_pitch_r.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
   standmode_output->joints_cmd.joint_k_pitch_r.pos_cmd = pos_cmd[static_cast<int>(l5a::Joints::right_knee_joint)];
+  // standmode_output->joints_cmd.joint_h_roll_l.pos_cmd = 0.0523599;
+  // standmode_output->joints_cmd.joint_h_pitch_l.pos_cmd = 0.261799;
+  // standmode_output->joints_cmd.joint_k_pitch_l.pos_cmd = -0.563811;
+  // standmode_output->joints_cmd.joint_h_roll_r.pos_cmd = -0.0523599;
+  // standmode_output->joints_cmd.joint_h_pitch_r.pos_cmd = 0.261799;
+  // standmode_output->joints_cmd.joint_k_pitch_r.pos_cmd = -0.563811;
   // velocity
   standmode_output->joints_cmd.joint_h_roll_l.vel_cmd = 0;
   standmode_output->joints_cmd.joint_h_pitch_l.vel_cmd = 0;
   standmode_output->joints_cmd.joint_k_pitch_l.vel_cmd = 0;
-  standmode_output->joints_cmd.joint_w_pitch_l.vel_cmd = vel_cmd[static_cast<int>(l5a::Joints::left_wheel_joint)];
+  standmode_output->joints_cmd.joint_w_pitch_l.vel_cmd = 0;
+  // standmode_output->joints_cmd.joint_w_pitch_l.vel_cmd = vel_cmd[static_cast<int>(l5a::Joints::left_wheel_joint)];
   standmode_output->joints_cmd.joint_h_roll_r.vel_cmd = 0;
   standmode_output->joints_cmd.joint_h_pitch_r.vel_cmd = 0;
   standmode_output->joints_cmd.joint_k_pitch_r.vel_cmd = 0;
-  standmode_output->joints_cmd.joint_w_pitch_r.vel_cmd = vel_cmd[static_cast<int>(l5a::Joints::right_wheel_joint)];
+ standmode_output->joints_cmd.joint_w_pitch_r.vel_cmd = 0;
+  // standmode_output->joints_cmd.joint_w_pitch_r.vel_cmd = vel_cmd[static_cast<int>(l5a::Joints::right_wheel_joint)];
 
   standmode_output->joints_cmd.joint_h_roll_l.torque_cmd = 0;
   standmode_output->joints_cmd.joint_h_pitch_l.torque_cmd = 0;
   standmode_output->joints_cmd.joint_k_pitch_l.torque_cmd = 0;
-  standmode_output->joints_cmd.joint_w_pitch_l.torque_cmd = 0;
+  // standmode_output->joints_cmd.joint_w_pitch_l.torque_cmd = 0;
+  standmode_output->joints_cmd.joint_w_pitch_l.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::left_wheel_joint)];
 
   standmode_output->joints_cmd.joint_h_roll_r.torque_cmd = 0;
   standmode_output->joints_cmd.joint_h_pitch_r.torque_cmd = 0;
   standmode_output->joints_cmd.joint_k_pitch_r.torque_cmd = 0;
-  standmode_output->joints_cmd.joint_w_pitch_r.torque_cmd = 0;
+  // standmode_output->joints_cmd.joint_w_pitch_r.torque_cmd = 0;
+  standmode_output->joints_cmd.joint_w_pitch_r.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::right_wheel_joint)];
   // torque
   // standmode_output->joints_cmd.joint_h_roll_l.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::left_hip_roll_joint)];
   // standmode_output->joints_cmd.joint_h_pitch_l.torque_cmd = tau_cmd[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
@@ -213,25 +223,25 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
   }
   // std::cout << "pos_cmd" << pos_cmd.transpose() << std::endl;
 
-  robot_model.observed_value[1] = robot_model.q_rpy[3];//roll
-  robot_model.observed_value[2] = robot_model.q_rpy[4];//pitch
-  // std::cout << "pitch:" << robot_model.q_rpy[4] << std::endl;
-  robot_model.observed_value[3] = pos_cmd[static_cast<int>(l5a::Joints::left_hip_roll_joint)];
-  robot_model.observed_value[4] = standmode_input->joints_status.joint_h_roll_l.pos_fb;
-  robot_model.observed_value[5] = pos_cmd[static_cast<int>(l5a::Joints::right_hip_roll_joint)];
-  robot_model.observed_value[6] = standmode_input->joints_status.joint_h_roll_r.pos_fb;
-  robot_model.observed_value[7] = pos_cmd[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
-  robot_model.observed_value[8] = standmode_input->joints_status.joint_h_pitch_l.pos_fb;
-  robot_model.observed_value[9] = pos_cmd[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
-  robot_model.observed_value[10] = standmode_input->joints_status.joint_h_pitch_r.pos_fb;
-  robot_model.observed_value[11] = pos_cmd[static_cast<int>(l5a::Joints::left_knee_joint)];
-  robot_model.observed_value[12] = standmode_input->joints_status.joint_k_pitch_l.pos_fb;
-  robot_model.observed_value[13] = pos_cmd[static_cast<int>(l5a::Joints::right_knee_joint)];
-  robot_model.observed_value[14] = standmode_input->joints_status.joint_k_pitch_r.pos_fb;
-  robot_model.observed_value[15] = tau_cmd[static_cast<int>(l5a::Joints::left_wheel_joint)];
-  robot_model.observed_value[16] = standmode_input->joints_status.joint_w_pitch_l.pos_fb * 2.1;
-  robot_model.observed_value[17] = tau_cmd[static_cast<int>(l5a::Joints::right_wheel_joint)];
-  robot_model.observed_value[18] = standmode_input->joints_status.joint_w_pitch_r.pos_fb * 2.1;
+  // robot_model.observed_value[1] = robot_model.q_rpy[3];//roll
+  // robot_model.observed_value[2] = robot_model.q_rpy[4];//pitch
+  // // std::cout << "pitch:" << robot_model.q_rpy[4] << std::endl;
+  // robot_model.observed_value[3] = pos_cmd[static_cast<int>(l5a::Joints::left_hip_roll_joint)];
+  // robot_model.observed_value[4] = standmode_input->joints_status.joint_h_roll_l.pos_fb;
+  // robot_model.observed_value[5] = pos_cmd[static_cast<int>(l5a::Joints::right_hip_roll_joint)];
+  // robot_model.observed_value[6] = standmode_input->joints_status.joint_h_roll_r.pos_fb;
+  // robot_model.observed_value[7] = pos_cmd[static_cast<int>(l5a::Joints::left_hip_pitch_joint)];
+  // robot_model.observed_value[8] = standmode_input->joints_status.joint_h_pitch_l.pos_fb;
+  // robot_model.observed_value[9] = pos_cmd[static_cast<int>(l5a::Joints::right_hip_pitch_joint)];
+  // robot_model.observed_value[10] = standmode_input->joints_status.joint_h_pitch_r.pos_fb;
+  // robot_model.observed_value[11] = pos_cmd[static_cast<int>(l5a::Joints::left_knee_joint)];
+  // robot_model.observed_value[12] = standmode_input->joints_status.joint_k_pitch_l.pos_fb;
+  // robot_model.observed_value[13] = pos_cmd[static_cast<int>(l5a::Joints::right_knee_joint)];
+  // robot_model.observed_value[14] = standmode_input->joints_status.joint_k_pitch_r.pos_fb;
+  // robot_model.observed_value[15] = tau_cmd[static_cast<int>(l5a::Joints::left_wheel_joint)];
+  // robot_model.observed_value[16] = standmode_input->joints_status.joint_w_pitch_l.pos_fb * 2.1;
+  // robot_model.observed_value[17] = tau_cmd[static_cast<int>(l5a::Joints::right_wheel_joint)];
+  // robot_model.observed_value[18] = standmode_input->joints_status.joint_w_pitch_r.pos_fb * 2.1;
   // robot_model.observed_value[3] = tau_cmd[static_cast<int>(l5a::Joints::left_hip_roll_joint)];
   // robot_model.observed_value[4] = standmode_input->joints_status.joint_h_roll_l.torque_fb * 2.35;
   // robot_model.observed_value[5] = tau_cmd[static_cast<int>(l5a::Joints::right_hip_roll_joint)];
@@ -249,9 +259,9 @@ void standMode_step(standmode_output_t* standmode_output, standmode_input_t* sta
   // robot_model.observed_value[17] = tau_cmd[static_cast<int>(l5a::Joints::right_wheel_joint)];
   // robot_model.observed_value[18] = standmode_input->joints_status.joint_w_pitch_r.torque_fb * 2.1;
 
-  robot_model.observed_value[19] = robot_model.q_rpy[11];
-  robot_model.observed_value[20] = robot_model.q_rpy[12];
-  robot_model.observed_value[21] = robot_model.q_rpy[13];
+  // robot_model.observed_value[19] = robot_model.q_rpy[11];
+  // robot_model.observed_value[20] = robot_model.q_rpy[12];
+  // robot_model.observed_value[21] = robot_model.q_rpy[13];
   // record data
 
 

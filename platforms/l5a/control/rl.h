@@ -101,6 +101,9 @@ class RL {
   Eigen::VectorXd est_latent_hist_;
   Eigen::VectorXd actions_;
   Eigen::VectorXd tau_;
+  Eigen::VectorXd vel_last_;
+  Eigen::VectorXd vel_filted_;
+  bool vel_filter_init_;
 
   // rl obs scale
   double obs_scales_lin_vel_;

@@ -16,6 +16,9 @@ RL::RL(RobotModel& robot_model) {
   est_latent_ = Eigen::VectorXd::Zero(num_est_);            // 估计值
   est_lin_vel_ = Eigen::VectorXd::Zero(num_est_);           // 估计线速度
   actions_ = Eigen::VectorXd::Zero(num_actions_);           // 动作
+  vel_last_ = Eigen::VectorXd::Zero(num_actions_);          // 上一帧速度
+  vel_filted_ = Eigen::VectorXd::Zero(num_actions_);        // 滤波后的速度
+  vel_filter_init_ = false;
 
   default_pos_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);  // 默认位置
   tau_ = Eigen::VectorXd::Zero(robot_model.pino_model().nv - 6);          // 力矩
@@ -125,6 +128,7 @@ void RL::InferenceLoop() {
       Eigen::Vector3d est_lin_vel = est_outputs_map / obs_scales_lin_vel_;
       Eigen::VectorXd est_latent = est_lin_vel * obs_scales_lin_vel_;
       // Eigen::VectorXd est_latent = base_vel * obs_scales_lin_vel_;  // 数据缩放,直接使用仿真器真值
+      // std::cout << "est:" << est_lin_vel << ", act:" << base_vel << std::endl;
 
       // controller inference
       Eigen::VectorXd ctrl_input(num_ctrl_);
@@ -160,7 +164,7 @@ void RL::InferenceLoop() {
       std::cerr << "Torch error in inference thread: " << e.what() << std::endl;
     }
   }
-  std::cout << "InferenceLoop running\n";
+  std::cout << "InferenceLoop exited\n";
 }
 
 void RL::Run(RobotModel& robot_model) {
@@ -197,7 +201,7 @@ void RL::Run(RobotModel& robot_model) {
   obs_[7] = (robot_model.vel_y_des_ + lin_vel_y_com_) * obs_scales_lin_vel_y_;
   obs_[8] = (robot_model.omega_des_ + omega_com_) * obs_scales_ang_vel_;
 #endif
-  obs_[9] = 0.643 * 5.0;
+  obs_[9] = 0.6447 * 5.0;
   obs_[10] = (pos - default_pos_)[static_cast<int>(Joints::left_hip_roll_joint)] * obs_scales_dof_pos_;
   obs_[11] = (pos - default_pos_)[static_cast<int>(Joints::left_hip_pitch_joint)] * obs_scales_dof_pos_;
   obs_[12] = (pos - default_pos_)[static_cast<int>(Joints::left_knee_joint)] * obs_scales_dof_pos_;
@@ -220,30 +224,33 @@ void RL::Run(RobotModel& robot_model) {
   // obs_[35] = 1;
   obs_ = obs_.cwiseMin(clip_obs_).cwiseMax(-clip_obs_);
 
-  // robot_model.observed_value[7] = obs_[0];
-  // robot_model.observed_value[8] = obs_[1];
-  // robot_model.observed_value[9] = obs_[2];
-  // robot_model.observed_value[10] = obs_[3];
-  // robot_model.observed_value[11] = obs_[4];
-  // robot_model.observed_value[12] = obs_[5];
-  // robot_model.observed_value[13] = obs_[6];
-  // robot_model.observed_value[14] = obs_[7];
-  // robot_model.observed_value[15] = obs_[8];
-  // robot_model.observed_value[16] = obs_[9];
+  robot_model.observed_value[1] = actions_[0];
+  robot_model.observed_value[2] = actions_[1];
+  robot_model.observed_value[3] = actions_[2];
+  robot_model.observed_value[4] = actions_[3];
+  robot_model.observed_value[5] = actions_[4];
+  robot_model.observed_value[6] = actions_[5];
+  robot_model.observed_value[7] = actions_[6];
+  robot_model.observed_value[8] = actions_[7];
+  robot_model.observed_value[9] = obs_[8];
+  robot_model.observed_value[10] = obs_[9];
 
-  // robot_model.observed_value[17] = obs_[10];
-  // robot_model.observed_value[18] = obs_[11];
-  // robot_model.observed_value[19] = obs_[12];
-  // robot_model.observed_value[20] = obs_[13];
-  // robot_model.observed_value[21] = obs_[14];
-  // robot_model.observed_value[22] = obs_[15];
-  // robot_model.observed_value[23] = obs_[16];
-  // robot_model.observed_value[24] = obs_[17];
-  // robot_model.observed_value[25] = obs_[18];
-  // robot_model.observed_value[26] = obs_[19];
-  // robot_model.observed_value[27] = obs_[20];
+  robot_model.observed_value[11] = obs_[10];
+  robot_model.observed_value[12] = obs_[11];
+  robot_model.observed_value[13] = obs_[12];
+  robot_model.observed_value[14] = obs_[13];
+  robot_model.observed_value[15] = obs_[14];
+  robot_model.observed_value[16] = obs_[15];
+  robot_model.observed_value[17] = obs_[16];
+  robot_model.observed_value[18] = obs_[17];
+  robot_model.observed_value[19] = obs_[18];
+  robot_model.observed_value[20] = obs_[19];
+  robot_model.observed_value[21] = obs_[20];
+  robot_model.observed_value[22] = obs_[21];
+  robot_model.observed_value[23] = obs_[22];
+  robot_model.observed_value[24] = obs_[23];
 
-  robot_model.observed_value[22] = shared_data_.inference_time_ms;
+  // robot_model.observed_value[22] = shared_data_.inference_time_ms;
   // robot_model.observed_value[23] = robot_model.omega_des_;
 
 
@@ -314,6 +321,13 @@ void RL::Run(RobotModel& robot_model) {
 
   vel_ref.segment(0, 3).setZero();  // joint vel ref set to zero
   vel_ref.segment(4, 3).setZero();
+
+  // if(!vel_filter_init_){
+  //   vel_filted_ = vel_ref;
+  //   vel_filter_init_ = true;
+  // }else{
+  //   vel_filted_ = 0.95*vel_filted_ + 0.05*vel_ref;
+  // }
 
   pos_target_ = pos_ref + default_pos_;
   vel_target_ = vel_ref;

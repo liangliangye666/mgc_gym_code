@@ -98,7 +98,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         action_scale_vel = 0.5
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip_roll": 80, "hip_pitch": 80, "knee": 80, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip_roll": 200, "hip_pitch": 200, "knee": 250, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
         damping = {"hip_roll": 2, "hip_pitch": 2, "knee": 2, "wheel": 1.5}  # [N*m*s/rad]
         # 抽取率：每个策略时间步长内的控制动作更新次数

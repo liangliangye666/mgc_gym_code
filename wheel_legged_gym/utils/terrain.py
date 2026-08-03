@@ -151,7 +151,7 @@ class Terrain:
         #     step_height = 0.05 + 0.2 * (difficulty - 0.4)                 # 台阶高度
         #     step_width = 0.3                                    # 台阶宽度
         step_height = 0.02 + 0.1 * difficulty                   # 台阶高度
-        step_width = 0.72 - 0.4 * difficulty                    # 台阶宽度
+        step_width = 0.66 - 0.4 * difficulty                    # 台阶宽度
         # if difficulty >= 0.4:
         #     step_width = 0.3                                    # 台阶宽度
         discrete_obstacles_height = 0.02 + difficulty * 0.2     # 离散障碍物高度
@@ -166,10 +166,19 @@ class Terrain:
             terrain.step_height = 0
             # step_width = step_width
             for k in range(num_goals):
-                # terrain.goals[k] = [5.0 + 0.6 * k * step_width, 4.0, 0.2]
-                y_rand = np.random.uniform(-2.0, 10.0)
-                terrain.goals[k] = [15.0, y_rand, 0.2]
-                # terrain.goals[k] = [8.0, 4.0, 0.2]
+                # y_rand = np.random.uniform(-2.0, 10.0)
+                # terrain.goals[k] = [9.0, y_rand, 0.2]
+                center_y = self.env_width / 2.0
+                if np.random.rand() < 0.2:
+                    y_offset = 0.0
+                else:
+                    side = np.random.choice([-1.0, 1.0])
+                    y_offset = side * np.random.uniform(1.0, 4.0) * (1 - difficulty*0.5)
+                y_rand = center_y + y_offset
+                if k==0:
+                    terrain.goals[k] = [self.env_length, y_rand, 0.2]
+                else:
+                    terrain.goals[k] = [self.env_length * 1.5, center_y, 0.2]
         elif choice < self.proportions[1]:
             if (
                 choice
@@ -191,12 +200,27 @@ class Terrain:
                 y_jitter=0.1,
                 x_jitter=0.6,
             )
-
             num_goals = self.num_goals
             terrain.goals = np.zeros((num_goals, 3))
             terrain.step_height = 0.02 + difficulty * 0.1
+            # for k in range(num_goals):
+            #     terrain.goals[k] = [self.env_length * 1.5, self.env_width / 2.0, 0.2]
             for k in range(num_goals):
-                terrain.goals[k] = [self.env_length * 1.5, self.env_width / 2.0, 0.2]
+                # y_rand = np.random.uniform(-2.0, 10.0)
+                # terrain.goals[k] = [9.0, y_rand, 0.2]
+                center_y = self.env_width / 2.0
+                if np.random.rand() < 0.2:
+                    y_offset = 0.0
+                else:
+                    side = np.random.choice([-1.0, 1.0])
+                    y_offset = side * np.random.uniform(1.0, 4.0) * (1 - difficulty*0.5)
+                y_rand = center_y + y_offset
+                if k==0:
+                    terrain.goals[k] = [self.env_length, y_rand, 0.2]
+                else:
+                    terrain.goals[k] = [self.env_length * 1.5, center_y, 0.2]
+
+
         elif choice < self.proportions[3]:
             if (
                 choice
@@ -238,9 +262,12 @@ class Terrain:
                     y_offset = 0.0
                 else:
                     side = np.random.choice([-1.0, 1.0])
-                    y_offset = side * np.random.uniform(2.0, 8.0) * (1 - difficulty)
+                    y_offset = side * np.random.uniform(1.0, 4.0) * (1 - difficulty*0.5)
                 y_rand = center_y + y_offset
-                terrain.goals[k] = [self.env_length * 1.5, y_rand, 0.2]
+                if k==0:
+                    terrain.goals[k] = [self.env_length, y_rand, 0.2]
+                else:
+                    terrain.goals[k] = [self.env_length * 1.5, center_y, 0.2]
 
         elif choice < self.proportions[6]:
             num_rectangles = 4                         # 随机矩形障碍的数量

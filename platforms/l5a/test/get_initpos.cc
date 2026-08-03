@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
     angKnee += (0.001 / 180.0) * M_PI;
       // angKnee = (0.0 / 180.0) * M_PI;
     // std::cout << "knee =: " << angKnee << std::endl;
-    double angRoll = (0.0 / 180.0) * M_PI;
+    double angRoll = (3.0 / 180.0) * M_PI;
   // double angRoll = (0.0 / 180.0) * M_PI;
     double angHip = (15.0 / 180.0) * M_PI;
     q << 0, 0, 0, 0, 0, 0, 0, angRoll, angHip, angKnee, 0, -angRoll, angHip, angKnee, 0;
