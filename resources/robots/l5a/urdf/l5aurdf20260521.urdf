@@ -265,13 +265,23 @@
     </visual>
     <collision>
       <origin
+        xyz="0 0.035 0"
+        rpy="1.5707963267948966 0 0" />
+      <geometry>
+        <cylinder
+          radius="0.127"
+          length="0.04" />
+      </geometry>
+    </collision>
+    <!-- <collision>
+      <origin
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
         <mesh
           filename="../meshes/left_wheel_link.STL" />
       </geometry>
-    </collision>
+    </collision> -->
   </link>
   <joint
     name="left_wheel_joint"
@@ -497,13 +507,23 @@
     </visual>
     <collision>
       <origin
+        xyz="0 -0.035 0"
+        rpy="1.5707963267948966 0 0" />
+      <geometry>
+        <cylinder
+          radius="0.127"
+          length="0.04" />
+      </geometry>
+    </collision>
+    <!-- <collision>
+      <origin
         xyz="0 0 0"
         rpy="0 0 0" />
       <geometry>
         <mesh
           filename="../meshes/right_wheel_link.STL" />
       </geometry>
-    </collision>
+    </collision> -->
   </link>
   <joint
     name="right_wheel_joint"

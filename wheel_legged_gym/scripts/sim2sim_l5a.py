@@ -316,10 +316,10 @@ if __name__ == "__main__":
             joystick_index = 0
             joystick_debug = False
         class robot_config:
-            # kps = np.array([84, 84, 84, 0, 84, 84, 84, 0], dtype=np.double)
-            # kds = np.array([2.5, 2.5, 2.5, 0.8, 2.5, 2.5, 2.5, 0.8], dtype=np.double)
-            kps = np.array([42, 42, 42, 0, 42, 42, 42, 0], dtype=np.double)
+            kps = np.array([84, 84, 84, 0, 84, 84, 84, 0], dtype=np.double)
             kds = np.array([2.5, 2.5, 2.5, 0.8, 2.5, 2.5, 2.5, 0.8], dtype=np.double)
+            # kps = np.array([42, 42, 42, 0, 42, 42, 42, 0], dtype=np.double)
+            # kds = np.array([2.5, 2.5, 2.5, 0.8, 2.5, 2.5, 2.5, 0.8], dtype=np.double)
             # kps = np.array([200, 200, 250, 0, 200, 200, 250, 0], dtype=np.double)
             # kds = np.array([2, 2, 2, 1.5, 2, 2, 2, 1.5], dtype=np.double)
             tau_limit = np.array([745, 745, 460, 400, 745, 745, 460, 400], dtype=np.double)

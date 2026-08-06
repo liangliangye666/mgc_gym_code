@@ -150,8 +150,8 @@ class Terrain:
         # else:
         #     step_height = 0.05 + 0.2 * (difficulty - 0.4)                 # 台阶高度
         #     step_width = 0.3                                    # 台阶宽度
-        step_height = 0.02 + 0.1 * difficulty                   # 台阶高度
-        step_width = 0.66 - 0.4 * difficulty                    # 台阶宽度
+        step_height = 0.025 + 0.15 * difficulty                   # 台阶高度
+        step_width = 0.611 - 0.4 * difficulty                    # 台阶宽度
         # if difficulty >= 0.4:
         #     step_width = 0.3                                    # 台阶宽度
         discrete_obstacles_height = 0.02 + difficulty * 0.2     # 离散障碍物高度
@@ -191,7 +191,7 @@ class Terrain:
         elif choice < self.proportions[2]:
             platform_surrounded_small_blocks_terrain(
                 terrain,
-                block_height=0.02 + difficulty * 0.1,
+                block_height=0.025 + difficulty * 0.15,
                 block_length=0.4,
                 block_width=0.4,
                 spacing_x=1.5,

@@ -90,15 +90,15 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
     class control(LeggedRobotCfg.control):
         # 位置动作的缩放系数
         # action_scale = [0.1, 0.5, 0.5, 10, 0.1, 0.5, 0.5, 10]
-        action_scale_pos = 0.25
+        action_scale_pos = 0.1
         # 速度动作的缩放系数
-        action_scale_vel = 0.5
+        action_scale_vel = 0.25
 
         # PD控制器参数:
         # 各关节的刚度系数
-        stiffness = {"hip_roll": 84, "hip_pitch": 84, "knee": 84, "wheel": 0}  # [N*m/rad]
+        stiffness = {"hip_roll": 350, "hip_pitch": 350, "knee": 350, "wheel": 0}  # [N*m/rad]
         # 各关节的阻尼系数
-        damping = {"hip_roll": 2.5, "hip_pitch": 2.5, "knee": 2.5, "wheel": 0.8}  # [N*m*s/rad]
+        damping = {"hip_roll": 3.5, "hip_pitch": 3.5, "knee": 3.5, "wheel": 3.5}  # [N*m*s/rad]
 
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 4
@@ -178,7 +178,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             # regulation related rewards
             # nominal_foot_position = 4.0
             leg_symmetry = 1.0
-            same_foot_x_position = -20 # 0.5
+            same_foot_x_position = -5 # 0.5
             default_pos = -1
             # same_foot_z_position = -100
             lin_vel_z = -0.3
@@ -205,8 +205,8 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         nominal_foot_position_tracking_sigma = 0.005
         nominal_foot_position_tracking_sigma_wrt_v = 0.5
         leg_symmetry_tracking_sigma = 0.001
-        foot_x_position_sigma = 0.001
-        height_tracking_sigma = 0.01
+        foot_x_position_sigma = 0.01
+        height_tracking_sigma = 0.05
         base_height_target = 0.643
         feet_height_target = 0.10
         min_feet_distance = 0.27

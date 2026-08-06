@@ -44,7 +44,7 @@ class LeggedRobotCfg(BaseConfig):
         num_future_goal_obs = 2
 
     class terrain:
-        horizontal_scale = 0.1  # [m]
+        horizontal_scale = 0.05  # [m]
         vertical_scale = 0.005  # [m]
         border_size = 25  # [m]
         static_friction = 0.4

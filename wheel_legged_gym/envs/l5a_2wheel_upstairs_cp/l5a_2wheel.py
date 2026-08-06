@@ -312,9 +312,9 @@ class L5A_2WHEEL(LeggedRobot):
             "lin_vel_x"
         ][env_ids, 0]
         cmd_vel_x[torch.abs(cmd_vel_x) < 0.1] = 0.0
-        self.commands[env_ids, 0] = cmd_vel_x
         high_env_mask = self.env_step_height[env_ids] > 0.1
         cmd_vel_x[high_env_mask] = torch.abs(cmd_vel_x[high_env_mask]) # 台阶高度大于10，那么只给向前的命令
+        self.commands[env_ids, 0] = cmd_vel_x
 
         cmd_vel_y = (
             self.command_ranges["lin_vel_y"][env_ids, 1]
@@ -399,6 +399,7 @@ class L5A_2WHEEL(LeggedRobot):
         # ===== 1. 接触检测 =====
         force_world = self.contact_forces[:, self.feet_indices, :]      # [N, 2, 3]
         force_xy = torch.norm(force_world[:, :, :2], dim=2)
+        # print("force_xy:", force_xy[0])
         force_base = torch.zeros_like(force_world)
 
         for i in range(len(self.feet_indices)):
@@ -408,7 +409,7 @@ class L5A_2WHEEL(LeggedRobot):
             )
 
         force_x = force_base[:, :, 0]                                   # [N, 2]
-        # print("force:", force_x[0])
+        # print("force_x:", force_x[0])
         vel_cmd = self.commands[:, 0].unsqueeze(1)
         vel_threshold = 0
         force_threshold = 10.0
@@ -626,7 +627,7 @@ class L5A_2WHEEL(LeggedRobot):
             foot_positions_base[:, i, :] = quat_rotate_inverse(self.base_quat, foot_positions_base[:, i, :] )
         foot_x_position_err = foot_positions_base[:,0,0] - foot_positions_base[:,1,0]
         # reward = torch.exp(-(foot_x_position_err ** 2)/ self.cfg.rewards.foot_x_position_sigma)
-        reward = torch.abs(foot_x_position_err)
+        reward = torch.square(foot_x_position_err) / self.cfg.rewards.foot_x_position_sigma
         return reward
 
     def _reward_lin_vel_z(self):
@@ -663,6 +664,26 @@ class L5A_2WHEEL(LeggedRobot):
         return torch.sum(
             torch.square(
                 self.actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]), dim=1)
+
+    # def _reward_action_rate_dof(self):
+    #     # Penalize changes in actions
+    #     return torch.sum(torch.square(self.actions[:, self.joint_indices] - self.last_actions[:, self.joint_indices, 0]), dim=1)
+
+    # def _reward_action_smooth_dof(self):
+    #     # Penalize changes in actions
+    #     return torch.sum(
+    #         torch.square(
+    #             self.actions[:, self.joint_indices] - 2 * self.last_actions[:, self.joint_indices, 0] + self.last_actions[:, self.joint_indices, 1]), dim=1)
+
+    # def _reward_action_rate_wheel(self):
+    #     # Penalize changes in actions
+    #     return torch.sum(torch.square(self.actions[:, self.wheel_indices] - self.last_actions[:, self.wheel_indices, 0]), dim=1)
+
+    # def _reward_action_smooth_wheel(self):
+    #     # Penalize changes in actions
+    #     return torch.sum(
+    #         torch.square(
+    #             self.actions[:, self.wheel_indices] - 2 * self.last_actions[:, self.wheel_indices, 0] + self.last_actions[:, self.wheel_indices, 1]), dim=1)
     
     def _reward_dof_pos_limits(self):
         # Penalize dof positions too close to the limit
@@ -761,7 +782,8 @@ class L5A_2WHEEL(LeggedRobot):
     def _reward_base_height(self):
         # Penalize base height away from target
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
-        return torch.abs(base_height - self.cfg.rewards.base_height_target)
+        height_error = torch.square(base_height - self.cfg.rewards.base_height_target) / self.cfg.rewards.height_tracking_sigma
+        return height_error
 
     def _reward_tracking_goal(self):
         current_pos = self.root_states[:, :2]
@@ -861,20 +883,21 @@ class L5A_2WHEEL(LeggedRobot):
     
     def _reward_wheel_spin(self):
         """
-        使用世界坐标系下的轮子速度计算打滑
+        使用base坐标系下的轮子前向速度计算打滑
         """
-        # 获取世界坐标系下的轮子速度
-        # 直接从 rigid_body_vel 获取，不转换到base系
         wheel_world_vel = self.rigid_body_vel[:, self.wheel_link_indices, :]  # 形状: (num_envs, 2, 3)
-        # 轮子角速度
+
+        wheel_base_vel = torch.zeros_like(wheel_world_vel)
+        for i in range(len(self.wheel_link_indices)):
+            wheel_base_vel[:, i, :] = quat_rotate_inverse(
+                self.base_quat, wheel_world_vel[:, i, :]
+            )
         wheel_vel = self.dof_vel[:, self.wheel_indices]  # 关节角速度
-        # 轮子理论线速度（世界坐标系中的期望前进方向）
         wheel_lin_vel = torch.abs(wheel_vel * self.cfg.asset.wheel_radius)
-        # 轮子实际水平速度（世界坐标系）
-        # 注意：我们只关心水平面内的打滑
-        wheel_actual_hor_vel = torch.abs(wheel_world_vel[:, :, 0])  # x-y平面速度模长
+        # 轮子实际前向速度，base系x方向为机器人前进方向
+        wheel_actual_hor_vel = torch.abs(wheel_base_vel[:, :, 0])
         # 论文公式
-        slip_condition = 0.8 * wheel_lin_vel - wheel_actual_hor_vel - 0.1
+        slip_condition = wheel_lin_vel - wheel_actual_hor_vel - 0.1
         slip_penalty = torch.relu(slip_condition)
         # 对两个轮子求和
         total_slip = torch.sum(slip_penalty, dim=1)
@@ -991,5 +1014,7 @@ class L5A_2WHEEL(LeggedRobot):
         force_xy = torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2)
         blocked = force_xy > 20.0
         wheel_action = torch.abs(self.actions[:, self.wheel_indices])
-        excess = torch.relu(wheel_action - 10.0)
-        return torch.sum(blocked.float() * torch.square(excess / 5.0), dim=1) * decay
+        action_des = 10.0
+        action_max = 35
+        excess_rate = torch.clamp(torch.relu(wheel_action - action_des) / (action_max - action_des), 0.0, 1.0)
+        return torch.sum(blocked.float() * excess_rate, dim=1) * decay
