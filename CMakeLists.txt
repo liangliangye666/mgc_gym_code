@@ -24,10 +24,10 @@ set(BUILD_SHARED_LIBS ON)
 add_compile_options(-Wno-conversion -Wno-format-truncation)
 
 add_subdirectory(third_party)
+add_subdirectory(math)
 add_subdirectory(sim)
 add_subdirectory(platforms)
 add_subdirectory(scripts)
 add_subdirectory(tools)
-add_subdirectory(math)
 
 # ament_package()

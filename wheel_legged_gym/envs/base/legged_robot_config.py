@@ -168,9 +168,9 @@ class LeggedRobotCfg(BaseConfig):
         randomize_default_dof_pos_range = [-0.05, 0.05]  # 默认关节位置的随机偏移范围
 
         randomize_action_delay = True  # 是否随机化执行动作的延迟
-        delay_ms_range = [0, 30]  # 动作延迟的随机范围 (毫秒)
+        delay_ms_range = [0, 20]  # 动作延迟的随机范围 (毫秒)
         randomize_obs_delay = False # 是否随机化观测值反馈的延迟
-        obs_delay_range = [0, 30]
+        obs_delay_range = [0, 20]
 
         randomize_imu_offset = False
         randomize_imu_offset_range = [-1.2, 1.2]

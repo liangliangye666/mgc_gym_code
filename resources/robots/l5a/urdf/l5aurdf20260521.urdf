@@ -263,7 +263,7 @@
           rgba="0.79216 0.81961 0.93333 1" />
       </material>
     </visual>
-    <collision>
+    <!-- <collision>
       <origin
         xyz="0 0.035 0"
         rpy="1.5707963267948966 0 0" />
@@ -272,8 +272,8 @@
           radius="0.127"
           length="0.04" />
       </geometry>
-    </collision>
-    <!-- <collision>
+    </collision> -->
+    <collision>
       <origin
         xyz="0 0 0"
         rpy="0 0 0" />
@@ -281,7 +281,7 @@
         <mesh
           filename="../meshes/left_wheel_link.STL" />
       </geometry>
-    </collision> -->
+    </collision>
   </link>
   <joint
     name="left_wheel_joint"
@@ -505,7 +505,7 @@
           rgba="0.89804 0.91765 0.92941 1" />
       </material>
     </visual>
-    <collision>
+    <!-- <collision>
       <origin
         xyz="0 -0.035 0"
         rpy="1.5707963267948966 0 0" />
@@ -514,8 +514,8 @@
           radius="0.127"
           length="0.04" />
       </geometry>
-    </collision>
-    <!-- <collision>
+    </collision> -->
+    <collision>
       <origin
         xyz="0 0 0"
         rpy="0 0 0" />
@@ -523,7 +523,7 @@
         <mesh
           filename="../meshes/right_wheel_link.STL" />
       </geometry>
-    </collision> -->
+    </collision>
   </link>
   <joint
     name="right_wheel_joint"

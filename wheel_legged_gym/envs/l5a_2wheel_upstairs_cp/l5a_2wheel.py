@@ -394,6 +394,12 @@ class L5A_2WHEEL(LeggedRobot):
         self.has_swing = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.in_double_support = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)                        # 双支撑
         self.ds_time = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)                                # 双支撑时间
+        self.action_reg_weights = torch.tensor(
+            [5.0, 1.0, 1.0, 1.0, 5.0, 1.0, 1.0, 1.0],
+            dtype=torch.float,
+            device=self.device,
+            requires_grad=False,
+        )
 
     def _get_swing_stance_mask(self):
         # ===== 1. 接触检测 =====
@@ -579,15 +585,29 @@ class L5A_2WHEEL(LeggedRobot):
     # ------------ reward functions----------------
     def _reward_feet_distance(self):
         # Penalize base height away from target
-        feet_distance = torch.abs(self.foot_positions[:, 0, 1] - self.foot_positions[:, 1, 1])
+        reward = 0
+        foot_positions_base = self.foot_positions - \
+                            (self.base_position).unsqueeze(1).repeat(1, len(self.feet_indices), 1)
+        for i in range(len(self.feet_indices)):
+            foot_positions_base[:, i, :] = quat_rotate_inverse(self.base_quat, foot_positions_base[:, i, :] )
+        feet_distance = torch.abs(foot_positions_base[:, 0, 1] - foot_positions_base[:, 1, 1])
         min_d = self.cfg.rewards.min_feet_distance
         max_d = self.cfg.rewards.max_feet_distance
         too_close = torch.relu(min_d - feet_distance)
         too_far = torch.relu(feet_distance - max_d)
+        # reward = too_far + too_close
         reward = torch.square(too_close) + torch.square(too_far)
         # print("feet_distance:", feet_distance[0])
         # print("rew:", -50*reward[0])
         return reward
+
+    # def _reward_feet_distance(self):
+    #     # Penalize base height away from target
+    #     feet_distance = torch.norm(
+    #         self.foot_positions[:, 0, :2] - self.foot_positions[:, 1, :2], dim=-1
+    #     )
+    #     reward = torch.clip(self.cfg.rewards.min_feet_distance - feet_distance, 0, 1)
+    #     return reward
 
     def _reward_nominal_foot_position(self):
         #1. calculate foot postion wrt base in base frame  
@@ -627,7 +647,7 @@ class L5A_2WHEEL(LeggedRobot):
             foot_positions_base[:, i, :] = quat_rotate_inverse(self.base_quat, foot_positions_base[:, i, :] )
         foot_x_position_err = foot_positions_base[:,0,0] - foot_positions_base[:,1,0]
         # reward = torch.exp(-(foot_x_position_err ** 2)/ self.cfg.rewards.foot_x_position_sigma)
-        reward = torch.square(foot_x_position_err) / self.cfg.rewards.foot_x_position_sigma
+        reward = torch.abs(foot_x_position_err)
         return reward
 
     def _reward_lin_vel_z(self):
@@ -655,35 +675,23 @@ class L5A_2WHEEL(LeggedRobot):
         # Penalize dof velocities
         return torch.sum(torch.square(self.dof_vel[:, self.joint_indices]), dim=1)
 
+    # def _reward_action_rate(self):
+    #     # Penalize changes in actions
+    #     return torch.sum(torch.square(self.actions - self.last_actions[:, :, 0]), dim=1)
+
+    # def _reward_action_smooth(self):
+    #     # Penalize changes in actions
+    #     return torch.sum(
+    #         torch.square(
+    #             self.actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]), dim=1)
+
     def _reward_action_rate(self):
-        # Penalize changes in actions
-        return torch.sum(torch.square(self.actions - self.last_actions[:, :, 0]), dim=1)
+        delta_action = self.actions - self.last_actions[:, :, 0]
+        return torch.sum(self.action_reg_weights * torch.square(delta_action), dim=1)
 
     def _reward_action_smooth(self):
-        # Penalize changes in actions
-        return torch.sum(
-            torch.square(
-                self.actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]), dim=1)
-
-    # def _reward_action_rate_dof(self):
-    #     # Penalize changes in actions
-    #     return torch.sum(torch.square(self.actions[:, self.joint_indices] - self.last_actions[:, self.joint_indices, 0]), dim=1)
-
-    # def _reward_action_smooth_dof(self):
-    #     # Penalize changes in actions
-    #     return torch.sum(
-    #         torch.square(
-    #             self.actions[:, self.joint_indices] - 2 * self.last_actions[:, self.joint_indices, 0] + self.last_actions[:, self.joint_indices, 1]), dim=1)
-
-    # def _reward_action_rate_wheel(self):
-    #     # Penalize changes in actions
-    #     return torch.sum(torch.square(self.actions[:, self.wheel_indices] - self.last_actions[:, self.wheel_indices, 0]), dim=1)
-
-    # def _reward_action_smooth_wheel(self):
-    #     # Penalize changes in actions
-    #     return torch.sum(
-    #         torch.square(
-    #             self.actions[:, self.wheel_indices] - 2 * self.last_actions[:, self.wheel_indices, 0] + self.last_actions[:, self.wheel_indices, 1]), dim=1)
+        dd_action = self.actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]
+        return torch.sum(self.action_reg_weights * torch.square(dd_action), dim=1)
     
     def _reward_dof_pos_limits(self):
         # Penalize dof positions too close to the limit
@@ -782,8 +790,7 @@ class L5A_2WHEEL(LeggedRobot):
     def _reward_base_height(self):
         # Penalize base height away from target
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
-        height_error = torch.square(base_height - self.cfg.rewards.base_height_target) / self.cfg.rewards.height_tracking_sigma
-        return height_error
+        return torch.abs(base_height - self.cfg.rewards.base_height_target)
 
     def _reward_tracking_goal(self):
         current_pos = self.root_states[:, :2]
@@ -854,6 +861,7 @@ class L5A_2WHEEL(LeggedRobot):
         # print("clearance:", clearance[0])
         # print("env:", self.terrain_levels[0], self.terrain_types[0])
         height_error = torch.relu(target_height - clearance)
+        # print("height_err:", height_error[0])
         penalty = 1.0 - torch.exp(-height_error / sigma)
         h = penalty * swing_mask
         # print("pen:", penalty[0])
@@ -1017,4 +1025,4 @@ class L5A_2WHEEL(LeggedRobot):
         action_des = 10.0
         action_max = 35
         excess_rate = torch.clamp(torch.relu(wheel_action - action_des) / (action_max - action_des), 0.0, 1.0)
-        return torch.sum(blocked.float() * excess_rate, dim=1) * decay
+        return torch.sum(excess_rate, dim=1) * decay

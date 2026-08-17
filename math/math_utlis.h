@@ -36,6 +36,8 @@ Eigen::Vector3d EulerDotToOmegaStationary(const Eigen::Vector3d& rpy,
                                           const Eigen::Vector3d& eluer_dot);
 double LinearInterpolation(double start_pos, double end_pos, double t);
 int Rank(Eigen::MatrixXd& A);
+Eigen::Vector3d QuatRotateInverseXYZW(const Eigen::Vector4d& q_xyzw,
+                                      const Eigen::Vector3d& v);
 }  // namespace GacMath
 
 #endif

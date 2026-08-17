@@ -199,6 +199,7 @@ def run_mujoco(policy, estimator, cfg):
         # Obtain an observation
         q, dq, quat, v, omega, gvec = get_obs(data) # 获取17+16+4+3+3+3=46维的观测量
         q = q[-cfg.env.num_actions :] # q和dq都取后面6个关节相关的值
+        print("q:",q)
         dq = dq[-cfg.env.num_actions :]
 
         # 1000hz -> 100hz
@@ -276,7 +277,7 @@ def run_mujoco(policy, estimator, cfg):
 
         target_q[[0, 1, 2, 4, 5, 6]] = action[[0, 1, 2, 4, 5, 6]] * cfg.control.action_scale_pos
         target_dq[[3, 7]] = action[[3, 7]] * cfg.control.action_scale_vel
-        print("action:", action[[3, 7]])
+        # print("action:", action[[0, 4]])
 
         # Generate PD control
         tau = pd_control(target_q,default_q, q, cfg.robot_config.kps, target_dq, dq, cfg.robot_config.kds)  # Calc torques
@@ -318,10 +319,12 @@ if __name__ == "__main__":
         class robot_config:
             kps = np.array([84, 84, 84, 0, 84, 84, 84, 0], dtype=np.double)
             kds = np.array([2.5, 2.5, 2.5, 0.8, 2.5, 2.5, 2.5, 0.8], dtype=np.double)
+            # kps = np.array([84, 84, 84, 0, 84, 84, 84, 0], dtype=np.double)
+            # kds = np.array([2.5, 2.5, 2.5, 1.5, 2.5, 2.5, 2.5, 1.5], dtype=np.double)
             # kps = np.array([42, 42, 42, 0, 42, 42, 42, 0], dtype=np.double)
             # kds = np.array([2.5, 2.5, 2.5, 0.8, 2.5, 2.5, 2.5, 0.8], dtype=np.double)
-            # kps = np.array([200, 200, 250, 0, 200, 200, 250, 0], dtype=np.double)
-            # kds = np.array([2, 2, 2, 1.5, 2, 2, 2, 1.5], dtype=np.double)
+            # kps = np.array([200, 200, 200, 0, 200, 200, 200, 0], dtype=np.double)
+            # kds = np.array([2, 2, 2, 2, 2, 2, 2, 2], dtype=np.double)
             tau_limit = np.array([745, 745, 460, 400, 745, 745, 460, 400], dtype=np.double)
 
         joystick_source = None

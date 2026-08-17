@@ -119,7 +119,7 @@
               <joint name="left_wheel_joint" pos="0 0 0" axis="0 1 0" range="-1000000 1000000" actuatorfrcrange="-90 90"/>
               <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.79216 0.81961 0.93333 1" mesh="left_wheel_link"/>
               <geom type="mesh" rgba="0.79216 0.81961 0.93333 1" mesh="left_wheel_link"/>
-              <geom class="collision" type="cylinder" pos="0 0.035 0" euler="1.5707963267948966 0 0" size="0.127 0.020"/>
+              <!-- <geom class="collision" type="cylinder" pos="0 0.035 0" euler="1.5707963267948966 0 0" size="0.127 0.020"/> -->
             </body>
           </body>
         </body>
@@ -144,7 +144,7 @@
               <joint name="right_wheel_joint" pos="0 0 0" axis="0 1 0" range="-1000000 1000000" actuatorfrcrange="-90 90"/>
               <geom type="mesh" contype="0" conaffinity="0" group="1" density="0" rgba="0.89804 0.91765 0.92941 1" mesh="right_wheel_link"/>
               <geom type="mesh" rgba="0.89804 0.91765 0.92941 1" mesh="right_wheel_link"/>
-              <geom class="collision" type="cylinder" pos="0 -0.035 0" euler="1.5707963267948966 0 0" size="0.127 0.020"/>
+              <!-- <geom class="collision" type="cylinder" pos="0 -0.035 0" euler="1.5707963267948966 0 0" size="0.127 0.020"/> -->
             </body>
           </body>
         </body>

@@ -25,7 +25,8 @@ if(SIM_ENABLE)
         joystick
         joint_vel_est
         imu
-        kalman_filter)
+        kalman_filter
+        gac_math)
     target_compile_definitions(robot_model PUBLIC SIM_ENABLE=1)
 elseif(PHYSICS_ENABLE)
     message(STATUS "SIM_ENABLE is OFF: Excluding Mujoco")
@@ -39,7 +40,8 @@ elseif(PHYSICS_ENABLE)
         joystick
         joint_vel_est
         imu
-        kalman_filter)
+        kalman_filter
+        gac_math)
     target_compile_definitions(robot_model PUBLIC PHYSICS_ENABLE=1)
 endif()
 target_link_libraries(

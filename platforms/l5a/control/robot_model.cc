@@ -190,10 +190,14 @@ void RobotModel::UpdateRealJointStates(standmode_output_t* standmode_output, sta
     // q_pino[i] = q_rpy[i];
     q_pino[i] = 0;
   }
-  q_pino[3] = quat_rpy.x();  // x
-  q_pino[4] = quat_rpy.y();  // y
-  q_pino[5] = quat_rpy.z();  // z
-  q_pino[6] = quat_rpy.w();  // w
+  // q_pino[3] = quat_rpy.x();  // x
+  // q_pino[4] = quat_rpy.y();  // y
+  // q_pino[5] = quat_rpy.z();  // z
+  // q_pino[6] = quat_rpy.w();  // w
+  q_pino[3] = standmode_input_->IMU_signals.IMU_qx;  // x
+  q_pino[4] = standmode_input_->IMU_signals.IMU_qy;  // y
+  q_pino[5] = standmode_input_->IMU_signals.IMU_qz;  // z
+  q_pino[6] = standmode_input_->IMU_signals.IMU_qw;  // w
 
   q_pino[7] = standmode_input->joints_status.joint_h_roll_l.pos_fb;
   q_pino[8] = standmode_input->joints_status.joint_h_pitch_l.pos_fb;

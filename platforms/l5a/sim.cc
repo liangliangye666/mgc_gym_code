@@ -60,7 +60,7 @@ void MyController(const mjModel* m, mjData* d) {
   static l5a::FSM fsm(robot_model);
   robot_model.vel_x_des_ = 0.5;
   robot_model.vel_y_des_ = -0.0;
-  robot_model.omega_des_ = 0.02;
+  robot_model.omega_des_ = 0.0;
   robot_model.gait_enable_ = false;
   static double count_num = 0;
   static double count_num_plus = 0;
@@ -123,9 +123,11 @@ void MyController(const mjModel* m, mjData* d) {
 
 
   // logfile << "t, vel_des, vel_act, w_des, w_act, zero, roll, pitch, height_target, height\n";
-  logfile << d->time << "," << robot_model.vel_x_des_ << "," << robot_model.qdot[0] << "," << robot_model.vel_y_des_ << "," << robot_model.qdot[1] << "," 
-  << robot_model.omega_des_ << "," << robot_model.qdot[5] << "," << 0 << "," << robot_model.q_rpy[3] << "," 
-  << robot_model.q_rpy[4] << "," << 0.643 << "," << robot_model.q_rpy[2] << "," << z_left << "," << z_right << "\n";
+  // logfile << d->time << "," << robot_model.vel_x_des_ << "," << robot_model.qdot[0] << "," << robot_model.vel_y_des_ << "," << robot_model.qdot[1] << "," 
+  // << robot_model.omega_des_ << "," << robot_model.qdot[5] << "," << 0 << "," << robot_model.q_rpy[3] << "," 
+  // << robot_model.q_rpy[4] << "," << 0.643 << "," << robot_model.q_rpy[2] << "," << z_left << "," << z_right << "\n";
+  logfile << d->time << "," << pos_cmd[0] << "," << pos_cmd[1] << "," << pos_cmd[2] << "," << pos_cmd[3] << "," 
+  << robot_model.q_rpy[6] << "," << robot_model.q_rpy[7] << "," << robot_model.q_rpy[8] << "," << robot_model.q_rpy[9] << "\n";
 
 }
 
@@ -644,7 +646,8 @@ int main(int argc, char** argv) {
   signal(SIGINT, exit_handler);
   signal(SIGTERM, exit_handler);
   logfile.open("log.csv");
-  logfile << "t, vel_x_des, vel_x_act, vel_y_des, vel_y_act, w_des, w_act, zero, roll, pitch, height_target, height, z_left, z_right\n";
+  // logfile << "t, vel_x_des, vel_x_act, vel_y_des, vel_y_act, w_des, w_act, zero, roll, pitch, height_target, height, z_left, z_right\n";
+  logfile << "t, hrl, hpl, kl, wl, hrl_fb, hpl_fb, kl_fb, wl_fb\n";
   MujocoSimulator(argc, argv);
 
   return 0;

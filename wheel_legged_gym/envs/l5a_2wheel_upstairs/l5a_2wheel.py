@@ -111,7 +111,8 @@ class L5A_2WHEEL(LeggedRobot):
         self.last_base_position[env_ids] = self.base_position[env_ids]
         self.last_foot_positions[env_ids] = self.foot_positions[env_ids]
         self.last_dof_vel[env_ids] = 0.0
-        self.feet_air_time[env_ids] = 0.0     
+        self.feet_air_time[env_ids] = 0.0   
+        episode_lengths = torch.clamp(self.episode_length_buf[env_ids].float(), min=1.0)  
         self.episode_length_buf[env_ids] = 0.0 # 回合计数器重置,统计当前回合已进行的步数,回合有终止或失败条件,然后重置时该变量刷新重置
         self.envs_steps_buf[env_ids] = 0 # 环境从创建以来累计的总步数,用于课程学习,固定步数周期做一次调整等地方
         self.reset_buf[env_ids] = 1
@@ -138,6 +139,30 @@ class L5A_2WHEEL(LeggedRobot):
                 torch.mean(self.episode_sums[key][env_ids]) / self.max_episode_length_s
             )
             self.episode_sums[key][env_ids] = 0.0 # 计算env_ids环境下key奖励的平均奖励
+
+        action_abs = torch.mean(
+            self.episode_action_abs_sum[env_ids] / episode_lengths.unsqueeze(1), dim=0
+        )
+        delta_action_abs = torch.mean(
+            self.episode_delta_action_abs_sum[env_ids] / episode_lengths.unsqueeze(1), dim=0
+        )
+        dd_action_abs = torch.mean(
+            self.episode_dd_action_abs_sum[env_ids] / episode_lengths.unsqueeze(1), dim=0
+        )
+
+        names = [
+            "left_hip_roll", "left_hip_pitch", "left_knee", "left_wheel",
+            "right_hip_roll", "right_hip_pitch", "right_knee", "right_wheel",
+        ]
+
+        for i, name in enumerate(names):
+            self.extras["episode"][f"act_abs_{name}"] = action_abs[i]
+            self.extras["episode"][f"act_rate_abs_{name}"] = delta_action_abs[i]
+            self.extras["episode"][f"act_smooth_abs_{name}"] = dd_action_abs[i]
+        self.episode_action_abs_sum[env_ids] = 0.0
+        self.episode_delta_action_abs_sum[env_ids] = 0.0
+        self.episode_dd_action_abs_sum[env_ids] = 0.0
+        
         # log additional curriculum info
         if self.cfg.terrain.curriculum: # 地形课程信息记录
             self.extras["episode"]["terrain_level"] = torch.mean(self.terrain_levels.float())
@@ -202,6 +227,7 @@ class L5A_2WHEEL(LeggedRobot):
             self.gym.refresh_dof_state_tensor(self.sim)
             self.compute_dof_vel()
             self.update_contact_forces()
+        self._update_action_episode_stats()
         self.post_physics_step()
 
         # return clipped obs, clipped states (None), rewards, dones and infos
@@ -394,6 +420,19 @@ class L5A_2WHEEL(LeggedRobot):
         self.has_swing = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.in_double_support = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)                        # 双支撑
         self.ds_time = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)                                # 双支撑时间
+        self.episode_action_abs_sum = torch.zeros(
+            self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False
+        )
+        self.episode_delta_action_abs_sum = torch.zeros_like(self.episode_action_abs_sum)
+        self.episode_dd_action_abs_sum = torch.zeros_like(self.episode_action_abs_sum)
+
+    def _update_action_episode_stats(self):
+        delta_action = self.actions - self.last_actions[:, :, 0]
+        dd_action = self.actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]
+
+        self.episode_action_abs_sum += torch.abs(self.actions)
+        self.episode_delta_action_abs_sum += torch.abs(delta_action)
+        self.episode_dd_action_abs_sum += torch.abs(dd_action)
 
     def _get_swing_stance_mask(self):
         # ===== 1. 接触检测 =====
@@ -579,15 +618,29 @@ class L5A_2WHEEL(LeggedRobot):
     # ------------ reward functions----------------
     def _reward_feet_distance(self):
         # Penalize base height away from target
-        feet_distance = torch.abs(self.foot_positions[:, 0, 1] - self.foot_positions[:, 1, 1])
+        reward = 0
+        foot_positions_base = self.foot_positions - \
+                            (self.base_position).unsqueeze(1).repeat(1, len(self.feet_indices), 1)
+        for i in range(len(self.feet_indices)):
+            foot_positions_base[:, i, :] = quat_rotate_inverse(self.base_quat, foot_positions_base[:, i, :] )
+        feet_distance = torch.abs(foot_positions_base[:, 0, 1] - foot_positions_base[:, 1, 1])
         min_d = self.cfg.rewards.min_feet_distance
         max_d = self.cfg.rewards.max_feet_distance
         too_close = torch.relu(min_d - feet_distance)
         too_far = torch.relu(feet_distance - max_d)
+        # reward = too_far + too_close
         reward = torch.square(too_close) + torch.square(too_far)
         # print("feet_distance:", feet_distance[0])
         # print("rew:", -50*reward[0])
         return reward
+
+    # def _reward_feet_distance(self):
+    #     # Penalize base height away from target
+    #     feet_distance = torch.norm(
+    #         self.foot_positions[:, 0, :2] - self.foot_positions[:, 1, :2], dim=-1
+    #     )
+    #     reward = torch.clip(self.cfg.rewards.min_feet_distance - feet_distance, 0, 1)
+    #     return reward
 
     def _reward_nominal_foot_position(self):
         #1. calculate foot postion wrt base in base frame  
@@ -627,7 +680,7 @@ class L5A_2WHEEL(LeggedRobot):
             foot_positions_base[:, i, :] = quat_rotate_inverse(self.base_quat, foot_positions_base[:, i, :] )
         foot_x_position_err = foot_positions_base[:,0,0] - foot_positions_base[:,1,0]
         # reward = torch.exp(-(foot_x_position_err ** 2)/ self.cfg.rewards.foot_x_position_sigma)
-        reward = torch.square(foot_x_position_err) / self.cfg.rewards.foot_x_position_sigma
+        reward = torch.abs(foot_x_position_err)
         return reward
 
     def _reward_lin_vel_z(self):
@@ -664,7 +717,7 @@ class L5A_2WHEEL(LeggedRobot):
         return torch.sum(
             torch.square(
                 self.actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]), dim=1)
-
+    
     def _reward_dof_pos_limits(self):
         # Penalize dof positions too close to the limit
         out_of_limits = -(self.dof_pos - self.dof_pos_limits[:, 0]).clip(max=0.0)  # lower limit
@@ -762,8 +815,7 @@ class L5A_2WHEEL(LeggedRobot):
     def _reward_base_height(self):
         # Penalize base height away from target
         base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
-        height_error = torch.square(base_height - self.cfg.rewards.base_height_target) / self.cfg.rewards.height_tracking_sigma
-        return height_error
+        return torch.abs(base_height - self.cfg.rewards.base_height_target)
 
     def _reward_tracking_goal(self):
         current_pos = self.root_states[:, :2]

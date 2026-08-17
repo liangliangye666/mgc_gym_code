@@ -1,5 +1,7 @@
 #include "math_utlis.h"
 
+#include <cmath>
+
 namespace GacMath {
 Eigen::Matrix3d EulerToRotationMatrix(const double& yaw, const double& pitch,
                                       const double& roll) {
@@ -261,5 +263,24 @@ Eigen::Vector3d EulerDotToOmegaStationary(const Eigen::Vector3d& rpy,
 double LinearInterpolation(double start_pos, double end_pos, double t) {
   return start_pos + (end_pos - start_pos) * t;
 }
+
+Eigen::Vector3d QuatRotateInverseXYZW(
+    const Eigen::Vector4d& q_xyzw,
+    const Eigen::Vector3d& v) {
+  Eigen::Vector3d q_vec(q_xyzw[0], q_xyzw[1], q_xyzw[2]);
+  double q_w = q_xyzw[3];
+
+  double norm = q_vec.squaredNorm() + q_w * q_w;
+  if (std::abs(norm - 1.0) > 1e-6) {
+    double inv_norm = 1.0 / std::sqrt(norm);
+    q_vec *= inv_norm;
+    q_w *= inv_norm;
+  }
+
+  return (2.0 * q_w * q_w - 1.0) * v
+       - 2.0 * q_w * q_vec.cross(v)
+       + 2.0 * q_vec * q_vec.dot(v);
+}
+
 
 }  // namespace GacMath

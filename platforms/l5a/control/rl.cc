@@ -183,6 +183,9 @@ void RL::Run(RobotModel& robot_model) {
 
   Eigen::Vector3d gravity;
   gravity << 0.0, 0.0, -1;
+  // Eigen::Vector4d base_quat_xyzw;
+  // base_quat_xyzw = robot_model.q_pino.segment(3, 4);
+  // Eigen::Vector3d projected_gravity = GacMath::QuatRotateInverseXYZW(base_quat_xyzw, gravity);
   Eigen::Vector3d projected_gravity = robot_model.R_BW * gravity;
 
   // base的线速度与角速度
@@ -232,26 +235,26 @@ void RL::Run(RobotModel& robot_model) {
   robot_model.observed_value[6] = actions_[5];
   robot_model.observed_value[7] = actions_[6];
   robot_model.observed_value[8] = actions_[7];
-  robot_model.observed_value[9] = obs_[8];
-  robot_model.observed_value[10] = obs_[9];
 
-  robot_model.observed_value[11] = obs_[10];
-  robot_model.observed_value[12] = obs_[11];
-  robot_model.observed_value[13] = obs_[12];
-  robot_model.observed_value[14] = obs_[13];
-  robot_model.observed_value[15] = obs_[14];
-  robot_model.observed_value[16] = obs_[15];
-  robot_model.observed_value[17] = obs_[16];
-  robot_model.observed_value[18] = obs_[17];
-  robot_model.observed_value[19] = obs_[18];
-  robot_model.observed_value[20] = obs_[19];
+  robot_model.observed_value[9] = obs_[0];
+  robot_model.observed_value[10] = obs_[1];
+  robot_model.observed_value[11] = obs_[2];
+  robot_model.observed_value[12] = obs_[10];
+  robot_model.observed_value[13] = obs_[11];
+  robot_model.observed_value[14] = obs_[12];
+  robot_model.observed_value[15] = obs_[13];
+  robot_model.observed_value[16] = obs_[14];
+  robot_model.observed_value[17] = obs_[15];
+  robot_model.observed_value[18] = obs_[16];
+  robot_model.observed_value[19] = obs_[17];
+  robot_model.observed_value[20] = obs_[18];
   robot_model.observed_value[21] = obs_[20];
   robot_model.observed_value[22] = obs_[21];
   robot_model.observed_value[23] = obs_[22];
-  robot_model.observed_value[24] = obs_[23];
+  // robot_model.observed_value[24] = obs_[23];
 
-  // robot_model.observed_value[22] = shared_data_.inference_time_ms;
-  // robot_model.observed_value[23] = robot_model.omega_des_;
+  // robot_model.observed_value[25] = shared_data_.inference_time_ms;
+  // robot_model.observed_value[26] = robot_model.omega_des_;
 
 
 
