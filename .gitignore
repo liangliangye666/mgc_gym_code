@@ -15,3 +15,9 @@
 third_party/x86/pcl/
 logs
 env
+docs
+AGENTS.md
+CODEBUDDY.md
+AI_INDEX.md
+*.pyc
+*.pyo
