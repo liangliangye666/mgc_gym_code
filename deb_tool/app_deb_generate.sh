@@ -27,7 +27,7 @@ trap 'rm -rf "${SOURCE_DIR}"' EXIT
 
 # 放到自己使用的目录下
 prototype="l5b"
-install_dir="wheel-upstairs"
+install_dir="wheel-upstairs-liang"
 package_name="${prototype}-${install_dir}"
 user_bin_dir="${SOURCE_DIR}/user_space/user/${install_dir}"
 mkdir -p "${user_bin_dir}"

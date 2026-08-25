@@ -27,6 +27,7 @@ wheel_legged_gym/rsl_rl/utils/neptune_utils.py
 wheel_legged_gym/rsl_rl/utils/utils.py
 wheel_legged_gym/rsl_rl/utils/wandb_utils.py
 wheel_legged_gym/utils/__init__.py
+wheel_legged_gym/utils/handle.py
 wheel_legged_gym/utils/helpers.py
 wheel_legged_gym/utils/logger.py
 wheel_legged_gym/utils/math.py

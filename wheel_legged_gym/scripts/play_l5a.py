@@ -50,7 +50,7 @@ def play(args):
     env_cfg.env.fail_to_terminal_time_s = 1
     env_cfg.env.num_envs = min(env_cfg.env.num_envs, 20)
     env_cfg.commands.resampling_time = 1000  # 重采样间隔 （s）
-    if robot_type == "l5a_2wheel_upstairs" or  robot_type == "l5a_2wheel_upstairs_cp":
+    if robot_type == "l5a_2wheel_upstairs" or  robot_type == "l5a_2wheel_upstairs_cp" or  robot_type == "l5a_2wheel_upstairs_cp_liang":
         env_cfg.terrain.mesh_type = "trimesh"
     else:
         env_cfg.terrain.mesh_type = "plane"
@@ -117,7 +117,7 @@ def play(args):
     vel_cmd = torch.zeros(env.num_envs, device=env.device)
 
     for i in tqdm(range(stop_state_log)):
-        if robot_type == "l5a_2wheel_upstairs" or  robot_type == "l5a_2wheel_upstairs_cp":
+        if robot_type == "l5a_2wheel_upstairs" or  robot_type == "l5a_2wheel_upstairs_cp" or  robot_type == "l5a_2wheel_upstairs_cp_liang":
             _set_wheel_contact_colors(env)
         if ppo_runner.alg.actor_critic.is_sequence:
             actions, latent = policy(obs, obs_history)
@@ -129,7 +129,7 @@ def play(args):
         # env.commands[:, 2] = 0      # ang_vel
         env.commands[:, 3] = 0.643  # height
         env.commands[:, 5] = 0.2    # gait_resample
-        if robot_type == "l5a_2wheel_upstairs" or  robot_type == "l5a_2wheel_upstairs_cp":
+        if robot_type == "l5a_2wheel_upstairs" or  robot_type == "l5a_2wheel_upstairs_cp" or  robot_type == "l5a_2wheel_upstairs_cp_liang":
             env.commands[:, 0] = 0.5    # lin_vel_x
         if i > 300 and i<=1500:
             vel_cmd[:] = env.commands[:, 0] * np.clip((i - 300) * 0.05, 0, 1)

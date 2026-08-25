@@ -2,12 +2,25 @@
 
 #根据当前Git分支名作为容器名,检查同名容器是否在运行;若在运行则exec进入它,否则拉取镜像并用一组绑定(volumes/tmpfs/device/env/group)创建并启动一个交互式容器,进入bash
 
-docker_image=maguangcai/gac-robotics-dev:latest # 定义要使用的Docker镜像
-if branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then # 尝试用git rev-parse --abbrev-ref HEAD获取当前分支名并赋给branch_name
-    id="$branch_name" # 如果命令成功(脚本在git仓库里),就把容器名id设为分支名
-else # 如果失败(不在git仓库),打印警告并把id设为默认值
-    echo "Warning: Not in Git repository, use default ID 'ros-humble'"
-    id=ros-foxy  
+# docker_image=maguangcai/gac-robotics-dev:latest # 定义要使用的Docker镜像
+# if branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then # 尝试用git rev-parse --abbrev-ref HEAD获取当前分支名并赋给branch_name
+#     id="$branch_name" # 如果命令成功(脚本在git仓库里),就把容器名id设为分支名
+# else # 如果失败(不在git仓库),打印警告并把id设为默认值
+#     echo "Warning: Not in Git repository, use default ID 'ros-humble'"
+#     id=ros-foxy  
+# fi
+
+docker_image=maguangcai/gac-robotics-dev:latest
+
+# 使用“宿主机用户名 + Git 分支名”作为容器名，
+# 避免同一服务器上不同用户连接到同名容器。
+host_user=$(id -un)
+
+if branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); then
+    id="${host_user}-${branch_name}"
+else
+    echo "Warning: Not in Git repository, use default container name."
+    id="${host_user}-ros-foxy"
 fi
 
 for gid in $(id -G); do # 循环当前用户所属的所有组ID(id -G),把每个--group-add <gid>拼接到变量group_add_opts上,后续用于docker run,目的是把主机用户的组权限带入容器

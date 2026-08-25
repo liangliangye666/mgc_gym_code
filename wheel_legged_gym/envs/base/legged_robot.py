@@ -584,8 +584,8 @@ class LeggedRobot(BaseTask):
             heading = torch.atan2(forward[:, 1], forward[:, 0])
             self.yaw = heading
             # self.commands[:, 2] = torch.clip(1.5 * wrap_to_pi(self.commands[:, 4] - heading), -5, 5)
-            self.commands[:, 2] = torch.clip(2 * wrap_to_pi(self.target_yaw - heading), -1.0, 1.0)
-            # self.commands[:, 2] = wrap_to_pi(self.target_yaw - heading) / np.pi             # 角度归一化,当作角速度
+            # self.commands[:, 2] = torch.clip(2 * wrap_to_pi(self.target_yaw - heading), -1.0, 1.0)
+            self.commands[:, 2] = wrap_to_pi(self.target_yaw - heading) / np.pi             # 角度归一化,当作角速度
             # self.commands[:, 2] = self.commands[:, 4]
 
         if self.cfg.terrain.measure_heights:

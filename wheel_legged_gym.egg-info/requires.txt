@@ -8,3 +8,4 @@ onnx
 tqdm
 mujoco
 mujoco-python-viewer
+pygame

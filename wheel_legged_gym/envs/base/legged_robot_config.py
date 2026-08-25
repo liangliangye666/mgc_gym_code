@@ -39,7 +39,7 @@ class LeggedRobotCfg(BaseConfig):
         episode_length_s = 20  # episode length in seconds
         dof_vel_use_pos_diff = True
         fail_to_terminal_time_s = 0.5
-        next_goal_threshold = 0.2
+        next_goal_threshold = 0.5
         reach_goal_delay = 0.1
         num_future_goal_obs = 2
 

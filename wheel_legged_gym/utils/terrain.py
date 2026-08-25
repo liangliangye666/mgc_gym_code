@@ -150,7 +150,7 @@ class Terrain:
         # else:
         #     step_height = 0.05 + 0.2 * (difficulty - 0.4)                 # 台阶高度
         #     step_width = 0.3                                    # 台阶宽度
-        step_height = 0.02 + 0.1 * difficulty                   # 台阶高度
+        step_height = 0.02 + 0.2 * difficulty                   # 台阶高度
         step_width = 0.611 - 0.4 * difficulty                    # 台阶宽度
         # if difficulty >= 0.4:
         #     step_width = 0.3                                    # 台阶宽度
@@ -262,7 +262,7 @@ class Terrain:
                     y_offset = 0.0
                 else:
                     side = np.random.choice([-1.0, 1.0])
-                    y_offset = side * np.random.uniform(1.0, 4.0) * (1 - difficulty*0.5)
+                    y_offset = side * np.random.uniform(1.0, 4.0) * (1 - difficulty*0.8)
                     # y_offset = 0.0
                 y_rand = center_y + y_offset
                 if k==0:
