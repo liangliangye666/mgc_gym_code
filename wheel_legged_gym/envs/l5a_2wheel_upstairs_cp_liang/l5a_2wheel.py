@@ -52,6 +52,16 @@ from wheel_legged_gym.utils.math import (
     quat_from_euler_zyx,
 )
 from wheel_legged_gym.utils.helpers import class_to_dict
+from wheel_legged_gym.utils.stair_stability import (
+    NUM_STAIR_STATES,
+    STATE_APPROACH,
+    STATE_COOLDOWN,
+    STATE_SETTLE,
+    STATE_SWING,
+    StairStateMachine,
+    command_velocity_bounds,
+    limit_l5a_actions,
+)
 from .l5a_2wheel_config import L5A_2WHEEL_Cfg
 
 
@@ -106,6 +116,7 @@ class L5A_2WHEEL(LeggedRobot):
         self._resample_commands(env_ids) # 为每个环境生成新任务指令
 
         # reset buffers
+        self.actions[env_ids] = 0.0
         self.last_actions[env_ids] = 0.0 # 运动历史清零
         self.last_dof_pos[env_ids] = self.dof_pos[env_ids]
         self.last_base_position[env_ids] = self.base_position[env_ids]
@@ -124,11 +135,15 @@ class L5A_2WHEEL(LeggedRobot):
         self.dof_pos_int[env_ids] = 0
         self.last_contacts[env_ids] = 0.0
         self.contact_history[env_ids] = 0.0
-        self.current_swing[env_ids] = 0.0
-        self.swing_time[env_ids] = 0.0
+        self.stair_state_machine.reset(env_ids)
+        self.current_swing = self.stair_state_machine.current_leg
+        self.swing_time = self.stair_state_machine.state_time
+        self.swing_state = self.stair_state_machine.state
         self.has_swing[env_ids] = False
         self.swing_mask[env_ids] = 0                            # 摆动腿
         self.stance_mask[env_ids] = 1.0                         # 两条腿都重置为支撑腿
+        self.command_tracking_scale[env_ids] = 1.0
+        self.action_limit_fraction_step[env_ids] = 0.0
         self.in_double_support[env_ids] = True                        # 双支撑
         self.ds_time[env_ids] = 0.0                                # 双支撑时间
 
@@ -159,9 +174,62 @@ class L5A_2WHEEL(LeggedRobot):
             self.extras["episode"][f"act_abs_{name}"] = action_abs[i]
             self.extras["episode"][f"act_rate_abs_{name}"] = delta_action_abs[i]
             self.extras["episode"][f"act_smooth_abs_{name}"] = dd_action_abs[i]
+
+        state_occupancy = torch.mean(
+            self.episode_state_steps[env_ids] / episode_lengths.unsqueeze(1), dim=0
+        )
+        state_names = ["approach", "settle", "swing", "cooldown"]
+        for state_idx, state_name in enumerate(state_names):
+            self.extras["episode"][f"state_{state_name}_ratio"] = state_occupancy[state_idx]
+
+        settle_count = torch.sum(self.episode_settle_count[env_ids])
+        settle_end_count = torch.sum(self.episode_settle_end_count[env_ids])
+        swing_end_count = torch.sum(self.episode_swing_end_count[env_ids])
+        contact_count = torch.sum(self.episode_contact_count[env_ids])
+        self.extras["episode"]["settle_mean_time"] = torch.sum(
+            self.episode_settle_duration_sum[env_ids]
+        ) / torch.clamp(settle_end_count, min=1.0)
+        self.extras["episode"]["settle_timeout_rate"] = torch.sum(
+            self.episode_settle_timeout_count[env_ids]
+        ) / torch.clamp(settle_count, min=1.0)
+        self.extras["episode"]["swing_retrigger_rate"] = torch.sum(
+            self.episode_retrigger_count[env_ids]
+        ) / torch.clamp(settle_count, min=1.0)
+        self.extras["episode"]["contact_entry_speed"] = torch.sum(
+            self.episode_contact_speed_sum[env_ids]
+        ) / torch.clamp(contact_count, min=1.0)
+        self.extras["episode"]["peak_rebound_speed"] = torch.mean(
+            self.episode_peak_rebound_speed[env_ids]
+        )
+        self.extras["episode"]["swing_height_error"] = torch.sum(
+            self.episode_swing_height_error_sum[env_ids]
+        ) / torch.clamp(swing_end_count, min=1.0)
+        self.extras["episode"]["peak_clearance_overshoot"] = torch.mean(
+            self.episode_peak_clearance_overshoot[env_ids]
+        )
+        self.extras["episode"]["peak_blocking_force"] = torch.mean(
+            self.episode_peak_blocking_force[env_ids]
+        )
+        self.extras["episode"]["action_limit_rate"] = torch.mean(
+            self.episode_action_limit_sum[env_ids] / episode_lengths
+        )
         self.episode_action_abs_sum[env_ids] = 0.0
         self.episode_delta_action_abs_sum[env_ids] = 0.0
         self.episode_dd_action_abs_sum[env_ids] = 0.0
+        self.episode_state_steps[env_ids] = 0.0
+        self.episode_settle_count[env_ids] = 0.0
+        self.episode_settle_end_count[env_ids] = 0.0
+        self.episode_settle_duration_sum[env_ids] = 0.0
+        self.episode_settle_timeout_count[env_ids] = 0.0
+        self.episode_swing_end_count[env_ids] = 0.0
+        self.episode_retrigger_count[env_ids] = 0.0
+        self.episode_contact_count[env_ids] = 0.0
+        self.episode_contact_speed_sum[env_ids] = 0.0
+        self.episode_peak_rebound_speed[env_ids] = 0.0
+        self.episode_swing_height_error_sum[env_ids] = 0.0
+        self.episode_peak_clearance_overshoot[env_ids] = 0.0
+        self.episode_peak_blocking_force[env_ids] = 0.0
+        self.episode_action_limit_sum[env_ids] = 0.0
         
         # log additional curriculum info
         if self.cfg.terrain.curriculum: # 地形课程信息记录
@@ -200,7 +268,19 @@ class L5A_2WHEEL(LeggedRobot):
         # progress = self.total_learning_iteration / 10000
         # decay = max(1.0-progress, 0.0)
         clip_actions = self.cfg.normalization.clip_actions
-        self.actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
+        raw_actions = torch.clip(actions, -clip_actions, clip_actions).to(self.device)
+        self.actions = limit_l5a_actions(
+            raw_actions,
+            self.last_actions[:, :, 0],
+            self.joint_indices,
+            self.wheel_indices,
+            self.cfg.control.joint_action_delta_limit,
+            self.cfg.control.wheel_action_delta_limit,
+            self.cfg.control.wheel_action_abs_limit,
+        )
+        self.action_limit_fraction_step = torch.mean(
+            (torch.abs(self.actions - raw_actions) > 1e-6).float(), dim=1
+        )
         # print("actions:", self.actions[0])
         # self.actions = torch.zeros( # 初始化动作张量
         #     self.num_envs,
@@ -331,15 +411,18 @@ class L5A_2WHEEL(LeggedRobot):
             env_ids (List[int]): Environments ids for which new commands are needed
         """
         # old_cmd = self.commands.clone()               # 拷贝旧命令
-        cmd_vel_x = (
-            self.command_ranges["lin_vel_x"][env_ids, 1]
-            - self.command_ranges["lin_vel_x"][env_ids, 0]
-        ) * torch.rand(len(env_ids), device=self.device) + self.command_ranges[
-            "lin_vel_x"
-        ][env_ids, 0]
+        step_height = self.env_step_height[env_ids]
+        lower_bound, forward_max = command_velocity_bounds(
+            step_height,
+            self.command_ranges["lin_vel_x"][env_ids, 0],
+            self.command_ranges["lin_vel_x"][env_ids, 1],
+            self.cfg.commands.high_step_forward_only_threshold,
+            self.cfg.commands.high_step_min_forward_velocity,
+        )
+        cmd_vel_x = (forward_max - lower_bound) * torch.rand(
+            len(env_ids), device=self.device
+        ) + lower_bound
         cmd_vel_x[torch.abs(cmd_vel_x) < 0.1] = 0.0
-        high_env_mask = self.env_step_height[env_ids] > 0.1
-        cmd_vel_x[high_env_mask] = torch.abs(cmd_vel_x[high_env_mask]) # 台阶高度大于10，那么只给向前的命令
         self.commands[env_ids, 0] = cmd_vel_x
 
         cmd_vel_y = (
@@ -413,11 +496,28 @@ class L5A_2WHEEL(LeggedRobot):
         self.rwd_linVelTrackEnhancedPrev = torch.zeros(self.num_envs, device=self.device)
         self.rwd_angVelTrackEnhancedPrev = torch.zeros(self.num_envs, device=self.device)
         self.contact_history = torch.zeros(self.num_envs, len(self.feet_indices), 3, device=self.device, dtype=torch.float)
-        self.current_swing = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
-        self.swing_time = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)                             # 摆动时间
+        swing_cfg = self.cfg.swing_state
+        self.stair_state_machine = StairStateMachine(
+            self.num_envs,
+            self.device,
+            swing_cfg.settle_min_time,
+            swing_cfg.settle_max_time,
+            swing_cfg.settle_stable_steps,
+            swing_cfg.swing_min_time,
+            swing_cfg.swing_timeout_base,
+            swing_cfg.swing_timeout_height_gain,
+            swing_cfg.swing_height_margin,
+            swing_cfg.swing_finish_vertical_velocity,
+            swing_cfg.cooldown_time,
+        )
+        self.current_swing = self.stair_state_machine.current_leg
+        self.swing_time = self.stair_state_machine.state_time
+        self.swing_state = self.stair_state_machine.state
         self.swing_mask = torch.zeros(self.num_envs, 2, dtype=torch.float, device=self.device)                          # 摆动腿
         self.stance_mask = torch.zeros(self.num_envs, 2, dtype=torch.float, device=self.device)                         # 支撑腿
         self.has_swing = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.command_tracking_scale = torch.ones(self.num_envs, dtype=torch.float, device=self.device)
+        self.action_limit_fraction_step = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
         self.in_double_support = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)                        # 双支撑
         self.ds_time = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)                                # 双支撑时间
         self.episode_action_abs_sum = torch.zeros(
@@ -425,12 +525,28 @@ class L5A_2WHEEL(LeggedRobot):
         )
         self.episode_delta_action_abs_sum = torch.zeros_like(self.episode_action_abs_sum)
         self.episode_dd_action_abs_sum = torch.zeros_like(self.episode_action_abs_sum)
-        self.action_reg_weights = torch.tensor(
-            [5.0, 1.0, 1.0, 1.0, 5.0, 1.0, 1.0, 1.0],
+        self.action_delta_normalization = torch.tensor(
+            [0.20, 0.20, 0.20, 1.0, 0.20, 0.20, 0.20, 1.0],
             dtype=torch.float,
             device=self.device,
             requires_grad=False,
         )
+        self.episode_state_steps = torch.zeros(
+            self.num_envs, NUM_STAIR_STATES, dtype=torch.float, device=self.device
+        )
+        self.episode_settle_count = torch.zeros(self.num_envs, device=self.device)
+        self.episode_settle_end_count = torch.zeros(self.num_envs, device=self.device)
+        self.episode_settle_duration_sum = torch.zeros(self.num_envs, device=self.device)
+        self.episode_settle_timeout_count = torch.zeros(self.num_envs, device=self.device)
+        self.episode_swing_end_count = torch.zeros(self.num_envs, device=self.device)
+        self.episode_retrigger_count = torch.zeros(self.num_envs, device=self.device)
+        self.episode_contact_count = torch.zeros(self.num_envs, device=self.device)
+        self.episode_contact_speed_sum = torch.zeros(self.num_envs, device=self.device)
+        self.episode_peak_rebound_speed = torch.zeros(self.num_envs, device=self.device)
+        self.episode_swing_height_error_sum = torch.zeros(self.num_envs, device=self.device)
+        self.episode_peak_clearance_overshoot = torch.zeros(self.num_envs, device=self.device)
+        self.episode_peak_blocking_force = torch.zeros(self.num_envs, device=self.device)
+        self.episode_action_limit_sum = torch.zeros(self.num_envs, device=self.device)
 
     def _update_action_episode_stats(self):
         delta_action = self.actions - self.last_actions[:, :, 0]
@@ -439,91 +555,124 @@ class L5A_2WHEEL(LeggedRobot):
         self.episode_action_abs_sum += torch.abs(self.actions)
         self.episode_delta_action_abs_sum += torch.abs(delta_action)
         self.episode_dd_action_abs_sum += torch.abs(dd_action)
+        self.episode_action_limit_sum += self.action_limit_fraction_step
 
     def _get_swing_stance_mask(self):
-        # ===== 1. 接触检测 =====
-        force_world = self.contact_forces[:, self.feet_indices, :]      # [N, 2, 3]
-        force_xy = torch.norm(force_world[:, :, :2], dim=2)
-        # print("force_xy:", force_xy[0])
+        """Update the four-stage stair-contact state machine and its metrics."""
+        force_world = self.contact_forces[:, self.feet_indices, :]
         force_base = torch.zeros_like(force_world)
-
         for i in range(len(self.feet_indices)):
             force_base[:, i, :] = quat_rotate_inverse(
-                self.base_quat,
-                force_world[:, i, :]
+                self.base_quat, force_world[:, i, :]
             )
-
-        force_x = force_base[:, :, 0]                                   # [N, 2]
-        # print("force_x:", force_x[0])
+        force_x = force_base[:, :, 0]
         vel_cmd = self.commands[:, 0].unsqueeze(1)
-        vel_threshold = 0
-        force_threshold = 10.0
+        direction_threshold = self.cfg.swing_state.direction_force_threshold
 
-        # 下面两行的逻辑是保证下楼梯时不去触发抬腿
-        # 轮子向前运动，受到向前的水平力
-        forward_blocked = (vel_cmd > vel_threshold) & (force_x > force_threshold)
+        # 保留原有符号门控，避免下楼梯时把顺向接触误判成上台阶阻挡。
+        forward_blocked = (vel_cmd > 0.0) & (force_x > direction_threshold)
+        backward_blocked = (vel_cmd < 0.0) & (force_x < -direction_threshold)
+        no_swing = forward_blocked | backward_blocked
 
-        # 轮子向后运动，受到向后的水平力
-        backward_blocked = (vel_cmd < -vel_threshold) & (force_x < -force_threshold)
-
-        no_swing = forward_blocked | backward_blocked                    # [N, 2]
-        # print("no_trigger:", no_trigger[0])
-
-        # ===== 2. 稳定触发 =====
-        # 如果你只想瞬时触发，用这个：
-        # stable = trigger
-
-        # 如果你还想保留原来的接触历史抗抖，用这个：
-        contact_history_stable = self.contact_history.sum(dim=2) >= 3
-        # print("contact_history:", contact_history_stable[0])
+        contact_history_stable = (
+            self.contact_history.sum(dim=2)
+            >= self.cfg.swing_state.contact_history_hits
+        )
         stable = (~no_swing) & contact_history_stable
-        # print("stable:", stable[0])
-
         need_swing = stable.sum(dim=1) > 0
-
-        # ===== 3. 选候选腿 =====
         candidate = torch.argmax(torch.abs(force_x), dim=1)
-
         one_stable = stable.sum(dim=1) == 1
         if one_stable.any():
             candidate[one_stable] = torch.argmax(stable[one_stable].float(), dim=1)
 
-        # ===== 4. swing 状态机 =====
-        swing_duration = 0.05
-        lift_ratio_to_unlock = 0.9
+        swing_cfg = self.cfg.swing_state
+        dynamics_stable = (
+            (torch.abs(self.base_lin_vel[:, 0]) <= swing_cfg.settle_base_vel_x)
+            & (torch.abs(self.base_ang_vel[:, 1]) <= swing_cfg.settle_pitch_rate)
+            & (
+                torch.max(torch.abs(self.dof_vel[:, self.joint_indices]), dim=1).values
+                <= swing_cfg.settle_leg_joint_vel
+            )
+            & (
+                torch.max(torch.abs(self.dof_vel[:, self.wheel_indices]), dim=1).values
+                <= swing_cfg.settle_wheel_vel
+            )
+        )
+        events = self.stair_state_machine.step(
+            need_swing,
+            candidate,
+            dynamics_stable,
+            self.foot_heights,
+            self.foot_velocities[:, :, 2],
+            self.env_step_height,
+            self.dt,
+        )
+        self.current_swing = self.stair_state_machine.current_leg
+        self.swing_time = self.stair_state_machine.state_time
+        self.swing_state = self.stair_state_machine.state
+        self.has_swing = self.swing_state == STATE_SWING
 
-        start_swing = (~self.has_swing) & need_swing
-
-        if start_swing.any():
-            self.current_swing[start_swing] = candidate[start_swing]
-            self.has_swing[start_swing] = True
-            self.swing_time[start_swing] = 0.0
-
-        in_swing = self.has_swing
-        self.swing_time[in_swing] += self.dt
-
-        env_ids = torch.arange(self.num_envs, device=self.device)
-        current_clearance = self.foot_heights[env_ids, self.current_swing]
-        target_clearance = self.env_step_height
-        lift_enough = current_clearance >= lift_ratio_to_unlock * target_clearance
-        # force_z = self.contact_forces[:, self.feet_indices, 2]
-        # current_force_z = force_z[env_ids, self.current_swing]
-        # support_enough = current_force_z >= 20
-        # print("cur:", current_clearance[0])
-        # print("tar:", lift_ratio_to_unlock * target_clearance[0])
-        swing_finished = (in_swing & lift_enough)
-        # current_force_xy = force_xy[torch.arange(self.num_envs, device=self.device), self.current_swing]
-        # swing_finished = (in_swing & (self.swing_time >= swing_duration) & (current_force_xy < force_threshold))
-        if swing_finished.any():
-            self.has_swing[swing_finished] = False
-            self.swing_time[swing_finished] = 0.0
-
-        # ===== 5. 输出 mask =====
         self.swing_mask.zero_()
         self.swing_mask[torch.arange(self.num_envs), self.current_swing] = self.has_swing.float()
-        # print("swing:", self.swing_mask[0])
         self.stance_mask = 1.0 - self.swing_mask
         self.stance_mask[~self.has_swing] = 1.0
+
+        self.command_tracking_scale.fill_(1.0)
+        pause_tracking = (self.swing_state == STATE_SETTLE) | (
+            self.swing_state == STATE_SWING
+        )
+        self.command_tracking_scale[pause_tracking] = 0.0
+        in_cooldown = self.swing_state == STATE_COOLDOWN
+        self.command_tracking_scale[in_cooldown] = torch.clamp(
+            self.swing_time[in_cooldown] / swing_cfg.cooldown_time, 0.0, 1.0
+        )
+
+        self.episode_state_steps[
+            torch.arange(self.num_envs, device=self.device), self.swing_state
+        ] += 1.0
+        self.episode_settle_count += events["start_settle"].float()
+        settle_ended = events["start_swing"] | events["settle_timeout"]
+        self.episode_settle_end_count += settle_ended.float()
+        self.episode_settle_duration_sum += (
+            events["settle_elapsed"] * settle_ended.float()
+        )
+        self.episode_settle_timeout_count += events["settle_timeout"].float()
+        swing_ended = events["swing_finished"] | events["swing_timeout"]
+        self.episode_swing_end_count += swing_ended.float()
+        self.episode_retrigger_count += events["retrigger"].float()
+
+        start_settle = events["start_settle"]
+        self.episode_contact_count += start_settle.float()
+        self.episode_contact_speed_sum += (
+            torch.abs(self.base_lin_vel[:, 0]) * start_settle.float()
+        )
+        direction = torch.sign(self.commands[:, 0]).unsqueeze(1)
+        blocking_force = torch.relu(-direction * force_x)
+        peak_blocking_force = torch.max(blocking_force, dim=1).values
+        self.episode_peak_blocking_force = torch.maximum(
+            self.episode_peak_blocking_force, peak_blocking_force
+        )
+        rebound_speed = torch.relu(
+            -torch.sign(self.commands[:, 0]) * self.base_lin_vel[:, 0]
+        )
+        active_contact_cycle = (self.swing_state != STATE_APPROACH) | start_settle
+        self.episode_peak_rebound_speed = torch.maximum(
+            self.episode_peak_rebound_speed,
+            rebound_speed * active_contact_cycle.float(),
+        )
+
+        height_error = torch.abs(
+            events["selected_clearance"] - events["target_clearance"]
+        )
+        self.episode_swing_height_error_sum += height_error * swing_ended.float()
+        clearance_overshoot = torch.relu(
+            events["selected_clearance"] - events["target_clearance"]
+        )
+        active_swing = (self.swing_state == STATE_SWING) | swing_ended
+        self.episode_peak_clearance_overshoot = torch.maximum(
+            self.episode_peak_clearance_overshoot,
+            clearance_overshoot * active_swing.float(),
+        )
 
     # def _get_swing_stance_mask(self):
     #     # ===== 1. 接触检测 =====
@@ -571,8 +720,16 @@ class L5A_2WHEEL(LeggedRobot):
     #     self.stance_mask[self.in_double_support] = 1.0
 
     def _update_contact_history(self):
-        force_xy = torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2)
-        contact = (force_xy > 20.0).float()
+        force_world = self.contact_forces[:, self.feet_indices, :]
+        force_base = torch.zeros_like(force_world)
+        for i in range(len(self.feet_indices)):
+            force_base[:, i, :] = quat_rotate_inverse(
+                self.base_quat, force_world[:, i, :]
+            )
+        force_xy = torch.norm(force_base[:, :, :2], dim=2)
+        contact = (
+            force_xy > self.cfg.swing_state.contact_force_threshold
+        ).float()
         # print("contact:", contact[0])
         # 滑动窗口
         self.contact_history = torch.roll(self.contact_history, shifts=-1, dims=2)
@@ -717,14 +874,19 @@ class L5A_2WHEEL(LeggedRobot):
         return torch.sum(torch.square(self.dof_vel[:, self.joint_indices]), dim=1)
 
     def _reward_action_rate(self):
-        # Penalize changes in actions
-        return torch.sum(torch.square(self.actions - self.last_actions[:, :, 0]), dim=1)
+        # Normalize by 0.05 rad joint-target and 0.5 rad/s wheel-target changes.
+        delta_action = (
+            self.actions - self.last_actions[:, :, 0]
+        ) / self.action_delta_normalization
+        return torch.sum(torch.square(delta_action), dim=1)
 
     def _reward_action_smooth(self):
-        # Penalize changes in actions
-        return torch.sum(
-            torch.square(
-                self.actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]), dim=1)
+        dd_action = (
+            self.actions
+            - 2 * self.last_actions[:, :, 0]
+            + self.last_actions[:, :, 1]
+        ) / self.action_delta_normalization
+        return torch.sum(torch.square(dd_action), dim=1)
 
     # def _reward_action_rate(self):
     #     delta_action = self.actions - self.last_actions[:, :, 0]
@@ -742,7 +904,8 @@ class L5A_2WHEEL(LeggedRobot):
 
     def _reward_tracking_lin_vel_x(self):
         # Tracking of linear velocity commands (xy axes)
-        lin_vel_error = torch.square(self.commands[:, 0] - self.base_lin_vel[:, 0])
+        effective_command = self.commands[:, 0] * self.command_tracking_scale
+        lin_vel_error = torch.square(effective_command - self.base_lin_vel[:, 0])
         ans = torch.exp(-lin_vel_error / self.cfg.rewards.tracking_sigma)
         # print("err:", lin_vel_error[0])
         # print("ans:", ans[0])
@@ -755,8 +918,7 @@ class L5A_2WHEEL(LeggedRobot):
 
     def _reward_tracking_lin_vel_pb(self):
         delta_phi = ~self.reset_buf * (self._reward_tracking_lin_vel_x() - self.rwd_linVelTrackPrev)
-        # return ang_vel_error
-        return delta_phi / self.dt
+        return delta_phi / self.dt * self.command_tracking_scale
 
     def _reward_tracking_ang_vel(self):
         # Tracking of angular velocity commands (yaw)
@@ -786,7 +948,7 @@ class L5A_2WHEEL(LeggedRobot):
         惩罚 base 在指令反方向运动
         公式：max(0, -sgn(v_cmd) * v_x) * -40
         """
-        v_cmd = self.commands[:, 0]   # x方向指令速度
+        v_cmd = self.commands[:, 0] * self.command_tracking_scale
         v_x = self.base_lin_vel[:, 0] # base x方向实际速度
         direction = torch.sign(v_cmd)
         opposite_vel = torch.relu(-direction * v_x)
@@ -797,7 +959,7 @@ class L5A_2WHEEL(LeggedRobot):
         惩罚轮子在反方向旋转
         公式：sum(max(0, -sgn(v_cmd) * wheel_vel)) * -2
         """
-        v_cmd = self.commands[:, 0]  # x方向速度指令
+        v_cmd = self.commands[:, 0] * self.command_tracking_scale
         wheel_vel = self.dof_vel[:, self.wheel_indices]  # (num_envs, 2)
         # print("wheel_vel:", wheel_vel[0])
         direction = torch.sign(v_cmd)
@@ -851,7 +1013,7 @@ class L5A_2WHEEL(LeggedRobot):
         rew = sign * torch.sum(vel * direction, dim=-1) * decay
         # cmd_no_zero = (torch.abs(self.commands[:, 0]) > 1e-3).float()
         # print("rew:", sign[0] * torch.sum(vel * direction, dim=-1)[0])
-        return rew
+        return rew * self.command_tracking_scale
 
     def _reward_feet_air_time(self):
         # Reward long steps
@@ -912,15 +1074,30 @@ class L5A_2WHEEL(LeggedRobot):
     
     def _reward_swing_foot_lift(self):
         swing_mask = self.swing_mask
-        target_height = self.env_step_height.unsqueeze(1) + 0.02
-        target_height = torch.clamp(target_height, min=0.03)
-        clearance = self.foot_heights
-        normalized_lift = torch.clamp(clearance / (target_height + 1e-6), 0.0, 1.0)
-        lift_reward = torch.sum(normalized_lift * swing_mask, dim=1)
-        return lift_reward
-        # progress = self.total_learning_iteration / 20000
-        # decay = max(1.0-progress, 0.0)
-        # return lift_reward * decay
+        target_height = (
+            self.env_step_height.unsqueeze(1)
+            + self.cfg.swing_state.swing_height_margin
+        )
+        height_error = (
+            self.foot_heights - target_height
+        ) / self.cfg.rewards.swing_height_tracking_sigma
+        height_reward = torch.exp(-torch.square(height_error))
+        return torch.sum(height_reward * swing_mask, dim=1)
+
+    def _reward_swing_apex_vel(self):
+        target_height = (
+            self.env_step_height.unsqueeze(1)
+            + self.cfg.swing_state.swing_height_margin
+        )
+        near_target = self.foot_heights >= (
+            target_height - self.cfg.rewards.swing_height_tracking_sigma
+        )
+        excess_vertical_velocity = torch.relu(
+            torch.abs(self.foot_velocities[:, :, 2])
+            - self.cfg.swing_state.swing_finish_vertical_velocity
+        ) / self.cfg.rewards.swing_apex_velocity_scale
+        penalty = torch.square(excess_vertical_velocity) * near_target.float()
+        return torch.sum(penalty * self.swing_mask, dim=1)
     
     def _reward_wheel_zero_velocity(self):
         swing_mask = self.swing_mask
@@ -1008,7 +1185,10 @@ class L5A_2WHEEL(LeggedRobot):
     def _reward_triggered_leg_up_vel(self):
         foot_z_vel = self.foot_velocities[:, :, 2]
         up_vel = torch.relu(foot_z_vel)
-        target_height = self.env_step_height.unsqueeze(1) + 0.02
+        target_height = (
+            self.env_step_height.unsqueeze(1)
+            + self.cfg.swing_state.swing_height_margin
+        )
         lift_ratio = torch.clamp(self.foot_heights / (target_height + 1e-6), 0.0, 1.0)
         not_lifted = 1.0 - lift_ratio
         # 只奖励被触发的摆动腿向上运动
@@ -1035,19 +1215,19 @@ class L5A_2WHEEL(LeggedRobot):
         return reward * self.has_swing.float()
     
     def _reward_feet_contact_forces_x(self):
-        fz = torch.relu(self.contact_forces[:, self.feet_indices, 2])
-        fx = self.contact_forces[:, self.feet_indices, 0]
-
+        force_world = self.contact_forces[:, self.feet_indices, :]
+        force_base = torch.zeros_like(force_world)
+        for i in range(len(self.feet_indices)):
+            force_base[:, i, :] = quat_rotate_inverse(
+                self.base_quat, force_world[:, i, :]
+            )
+        fx = force_base[:, :, 0]
         direction = torch.sign(self.commands[:, 0]).unsqueeze(1)
         blocking_fx = torch.relu(-direction * fx)
-
-        contact = (fz > 5.0) | (blocking_fx > 5.0)
-
-        ratio = blocking_fx / (fz + 10.0)
-        penalty = torch.relu(ratio - 0.4) ** 2
-        penalty = torch.clamp(penalty, max=4.0)
-
-        return torch.sum(penalty * contact.float(), dim=1)
+        normalized_excess = torch.relu(
+            blocking_fx - self.cfg.swing_state.contact_force_threshold
+        ) / self.cfg.rewards.contact_force_scale
+        return torch.sum(torch.square(normalized_excess), dim=1)
 
     def _reward_air_wheel_vel(self):
         fz = self.contact_forces[:, self.feet_indices, 2]

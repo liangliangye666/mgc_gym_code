@@ -34,6 +34,7 @@ from scipy import interpolate
 
 from isaacgym import terrain_utils
 from wheel_legged_gym.envs.base.legged_robot_config import LeggedRobotCfg
+from wheel_legged_gym.utils.stair_stability import curriculum_obstacle_height
 
 
 class Terrain:
@@ -150,11 +151,21 @@ class Terrain:
         # else:
         #     step_height = 0.05 + 0.2 * (difficulty - 0.4)                 # 台阶高度
         #     step_width = 0.3                                    # 台阶宽度
-        step_height = 0.02 + 0.2 * difficulty                   # 台阶高度
+        if hasattr(self.cfg, "obstacle_height_min") and hasattr(
+            self.cfg, "obstacle_height_max"
+        ):
+            step_height = curriculum_obstacle_height(
+                difficulty,
+                self.cfg.num_rows,
+                self.cfg.obstacle_height_min,
+                self.cfg.obstacle_height_max,
+            )
+        else:
+            step_height = 0.02 + 0.2 * difficulty               # 台阶高度
         step_width = 0.611 - 0.4 * difficulty                    # 台阶宽度
         # if difficulty >= 0.4:
         #     step_width = 0.3                                    # 台阶宽度
-        discrete_obstacles_height = 0.02 + difficulty * 0.2     # 离散障碍物高度
+        discrete_obstacles_height = step_height                  # 离散障碍物高度
         stepping_stones_size = 1.5 * (1.05 - difficulty)        # 石头尺寸
         stone_distance = 0.05 if difficulty == 0 else 0.1       # 石头距离
         gap_size = 1.0 * difficulty                             # 沟宽度尺寸
@@ -191,7 +202,7 @@ class Terrain:
         elif choice < self.proportions[2]:
             platform_surrounded_small_blocks_terrain(
                 terrain,
-                block_height=0.02 + difficulty * 0.1,
+                block_height=discrete_obstacles_height,
                 block_length=0.4,
                 block_width=0.4,
                 spacing_x=1.5,
@@ -202,7 +213,7 @@ class Terrain:
             )
             num_goals = self.num_goals
             terrain.goals = np.zeros((num_goals, 3))
-            terrain.step_height = 0.02 + difficulty * 0.1
+            terrain.step_height = discrete_obstacles_height
             # for k in range(num_goals):
             #     terrain.goals[k] = [self.env_length * 1.5, self.env_width / 2.0, 0.2]
             for k in range(num_goals):
@@ -421,4 +432,3 @@ def platform_surrounded_small_blocks_terrain(
         x += spacing_x_px
 
     terrain.height_field_raw[platform_x1:platform_x2, platform_y1:platform_y2] = 0
-

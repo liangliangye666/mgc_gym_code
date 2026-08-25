@@ -46,6 +46,10 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         curriculum = True
         num_rows = 10  # number of terrain rows (levels),地形网格的行数(难度级别)
         num_cols = 10  # number of terrain cols (types),地形网格的列数(类型)
+        max_init_terrain_level = 2
+        obstacle_height_min = 0.02
+        obstacle_height_max = 0.16
+        restitution = 0.0
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
         terrain_proportions = [0.1, 0.0, 0.2, 0.0, 0.7, 0.0, 0.0, 0.0, 0.0] # 地形类型比例分布
         num_goals = 2
@@ -69,6 +73,8 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         gait_train_proportion = 0.8     # 训练步态的环境占比
         gait_foot_height = 0.207
         gait_period = 0.5 
+        high_step_forward_only_threshold = 0.10
+        high_step_min_forward_velocity = 0.10
 
     class init_state(LeggedRobotCfg.init_state):
 
@@ -103,6 +109,11 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 4
 
+        # 与 C++ 部署端保持一致的策略动作后处理参数
+        joint_action_delta_limit = 0.20
+        wheel_action_delta_limit = 1.0
+        wheel_action_abs_limit = 20.0
+
     class asset(LeggedRobotCfg.asset):
         file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/urdf/l5aurdf20260521.urdf" # 机器人urdf路径
         name = "l5a" # 机器人名称
@@ -135,7 +146,29 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
 
         clip_observations = 100.0 # 观测值剪裁
         clip_actions = 100.0 # 动作剪裁
-        wheel_clip_actions = 10
+        wheel_clip_actions = 20
+
+    class domain_rand(LeggedRobotCfg.domain_rand):
+        randomize_restitution = True
+        restitution_range = [0.0, 0.3]
+
+    class swing_state:
+        contact_force_threshold = 20.0
+        contact_history_hits = 2
+        direction_force_threshold = 10.0
+        settle_min_time = 0.10
+        settle_max_time = 0.60
+        settle_stable_steps = 3
+        settle_base_vel_x = 0.12
+        settle_pitch_rate = 0.35
+        settle_leg_joint_vel = 0.8
+        settle_wheel_vel = 1.5
+        swing_min_time = 0.16
+        swing_timeout_base = 0.40
+        swing_timeout_height_gain = 2.0
+        swing_height_margin = 0.02
+        swing_finish_vertical_velocity = 0.10
+        cooldown_time = 0.20
 
     class noise(LeggedRobotCfg.noise):
         add_noise = False
@@ -160,9 +193,10 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             feet_clearance = -5
             foot_landing_vel = -5
             swing_foot_lift = 10
-            triggered_leg_up_vel = 10.0
+            swing_apex_vel = -2.0
+            triggered_leg_up_vel = 2.0
             wrong_leg_lift = -10.0
-            triggered_leg_action_dir = 10.0
+            triggered_leg_action_dir = 0.0
 
             # tracking related rewards
             tracking_goal = 2
@@ -196,6 +230,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             wheel_spin = -20
             # blocked_wheel_action = -10
             feet_contact_forces = -5
+            feet_contact_forces_x = -5
             collision = -50.0
             keep_balance = 1
 
@@ -222,6 +257,8 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         landing_time_threshold = 0.12
         safe_landing_vel = 0.1
         contact_force_sigma = 40.0
+        swing_height_tracking_sigma = 0.03
+        swing_apex_velocity_scale = 0.30
     class sim(LeggedRobotCfg.sim):
         dt = 0.005  # 模拟时间步长 [秒]
         substeps = 1  # 每个时间步的子步数

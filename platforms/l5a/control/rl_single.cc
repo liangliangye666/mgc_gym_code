@@ -191,7 +191,10 @@ void RL::Run(RobotModel& robot_model) {
 
       const double* ctrl_outputs_ptr = ctrl_outputs.data_ptr<double>();
       Eigen::Map<const Eigen::VectorXd> actions_map(ctrl_outputs_ptr, num_actions_);
-      actions_ = actions_map;
+      const Eigen::VectorXd raw_actions = actions_map;
+      actions_ = LimitL5aActions(raw_actions, actions_, clip_actions_,
+                                 joint_action_delta_limit_, wheel_action_delta_limit_,
+                                 wheel_action_abs_limit_);
 
       auto end = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
@@ -202,7 +205,6 @@ void RL::Run(RobotModel& robot_model) {
 
     iter = 0;
   }
-  actions_ = actions_.cwiseMin(clip_actions_).cwiseMax(-clip_actions_);
   Eigen::VectorXd pos_ref = actions_ * action_scales_pos_;
   Eigen::VectorXd vel_ref = actions_ * action_scales_vel_;
 
@@ -303,6 +305,9 @@ void RL::LoadParameters() {
   obs_scales_height_ = config_["obs_scales"]["height_measurements"].as<double>();
   action_scales_pos_ = config_["control"]["action_scales"]["pos"].as<double>();
   action_scales_vel_ = config_["control"]["action_scales"]["vel"].as<double>();
+  joint_action_delta_limit_ = config_["control"]["action_limits"]["joint_delta"].as<double>();
+  wheel_action_delta_limit_ = config_["control"]["action_limits"]["wheel_delta"].as<double>();
+  wheel_action_abs_limit_ = config_["control"]["action_limits"]["wheel_abs"].as<double>();
   edamp_kd_hip_ = config_["control"]["EDamping"]["edamp_hip"].as<double>();
   edamp_kd_knee_ = config_["control"]["EDamping"]["edamp_knee"].as<double>();
   edamp_kd_wheel_ = config_["control"]["EDamping"]["edamp_wheel"].as<double>();

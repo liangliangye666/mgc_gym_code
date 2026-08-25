@@ -18,6 +18,11 @@ control:
     # 速度动作的缩放系数
     vel: 0.5
 
+  action_limits:
+    joint_delta: 0.20
+    wheel_delta: 1.0
+    wheel_abs: 20.0
+
   decimation: 10
 
   EDamping:

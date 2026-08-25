@@ -288,14 +288,15 @@ void RL::Run(RobotModel& robot_model) {
   {
     std::lock_guard<std::mutex> lock(shared_data_.mutex);
     if (shared_data_.has_new_result) {
-      actions_ = shared_data_.actions;
+      actions_ = LimitL5aActions(shared_data_.actions, actions_, clip_actions_,
+                                 joint_action_delta_limit_, wheel_action_delta_limit_,
+                                 wheel_action_abs_limit_);
       est_latent_ = shared_data_.est_latent;
       est_lin_vel_ = shared_data_.est_lin_vel;
       time_ms_ = shared_data_.inference_time_ms;
       shared_data_.has_new_result = false;
     }
   }
-  actions_ = actions_.cwiseMin(clip_actions_).cwiseMax(-clip_actions_);
   Eigen::VectorXd pos_ref = actions_ * action_scales_pos_;
   Eigen::VectorXd vel_ref = actions_ * action_scales_vel_;
 
@@ -403,6 +404,9 @@ void RL::LoadParameters() {
   obs_scales_height_ = config_["obs_scales"]["height_measurements"].as<double>();
   action_scales_pos_ = config_["control"]["action_scales"]["pos"].as<double>();
   action_scales_vel_ = config_["control"]["action_scales"]["vel"].as<double>();
+  joint_action_delta_limit_ = config_["control"]["action_limits"]["joint_delta"].as<double>();
+  wheel_action_delta_limit_ = config_["control"]["action_limits"]["wheel_delta"].as<double>();
+  wheel_action_abs_limit_ = config_["control"]["action_limits"]["wheel_abs"].as<double>();
   edamp_kd_hip_ = config_["control"]["EDamping"]["edamp_hip"].as<double>();
   edamp_kd_knee_ = config_["control"]["EDamping"]["edamp_knee"].as<double>();
   edamp_kd_wheel_ = config_["control"]["EDamping"]["edamp_wheel"].as<double>();

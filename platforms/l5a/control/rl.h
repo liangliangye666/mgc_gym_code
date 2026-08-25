@@ -10,6 +10,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "math/gac_math.h"
+#include "action_limiter.h"
 #include "pd_controller.h"
 #include "robot_model.h"
 
@@ -119,6 +120,7 @@ class RL {
 
   // rl actions scale
   double action_scales_pos_, action_scales_vel_;
+  double joint_action_delta_limit_, wheel_action_delta_limit_, wheel_action_abs_limit_;
 
   // pd cotroller
   PdController<Eigen::VectorXd> pd_controller_joints_;
