@@ -36,7 +36,7 @@ from wheel_legged_gym.envs.base.legged_robot_config import (
 class L5A_2WHEEL_Cfg(LeggedRobotCfg):
     class env(LeggedRobotCfg.env):
         num_actions = 8 # 每个环境中机器人的动作空间维度,通常对应于机器人的关节数量
-        num_observations = 3 + 3 + 4 + 6 + num_actions*2  # 定义状态观测向量的维度为27,即每个环境的状态观测是一个包含27个特征值的向量
+        num_observations = 3 + 3 + 4 + 6 + num_actions*2  # 32维：角速度、重力、命令、6维腿位置、8维速度、8维历史动作
         num_privileged_obs = 3 + num_observations + 7 * 11 + 2 + 2 + 6 + 6# 特权观测,评论家网络输入
         obs_history_length = 10  # number of observations stacked together,状态观测历史堆叠的长度
         obs_history_dec = 1 # 状态历史堆叠的衰减参数,当前时刻权重最高,这里设置为1说明没有衰减
@@ -49,7 +49,11 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         max_init_terrain_level = 2
         obstacle_height_min = 0.02
         obstacle_height_max = 0.16
+        fixed_obstacle_height = None  # 奖励/碰撞预验证时临时设为0.05，完整课程保持None
         restitution = 0.0
+        sharp_edge_probability = 0.40
+        edge_bevel_min = 0.003
+        edge_bevel_max = 0.012
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
         terrain_proportions = [0.1, 0.0, 0.2, 0.0, 0.7, 0.0, 0.0, 0.0, 0.0] # 地形类型比例分布
         num_goals = 2
@@ -115,7 +119,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         wheel_action_abs_limit = 20.0
 
     class asset(LeggedRobotCfg.asset):
-        file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/urdf/l5aurdf20260521.urdf" # 机器人urdf路径
+        file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/urdf/l5aurdf20260521_roll_contact.urdf" # 贴边滚爬任务专用圆柱轮碰撞模型
         name = "l5a" # 机器人名称
         foot_name = "wheel" # 足部名称
         joint_indices = [0, 1, 2, 4, 5, 6] # 关节索引
@@ -149,30 +153,51 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         wheel_clip_actions = 20
 
     class domain_rand(LeggedRobotCfg.domain_rand):
+        friction_range = [0.3, 1.0]
         randomize_restitution = True
-        restitution_range = [0.0, 0.3]
+        restitution_range = [0.0, 0.15]
+        randomize_action_delay = True
+        delay_ms_range = [0, 20]
+        randomize_obs_delay = True
+        obs_delay_range = [0, 20]
 
-    class swing_state:
+    class roll_state:
         contact_force_threshold = 20.0
         contact_history_hits = 2
         direction_force_threshold = 10.0
-        settle_min_time = 0.10
-        settle_max_time = 0.60
-        settle_stable_steps = 3
-        settle_base_vel_x = 0.12
-        settle_pitch_rate = 0.35
-        settle_leg_joint_vel = 0.8
-        settle_wheel_vel = 1.5
-        swing_min_time = 0.16
-        swing_timeout_base = 0.40
-        swing_timeout_height_gain = 2.0
-        swing_height_margin = 0.02
-        swing_finish_vertical_velocity = 0.10
-        cooldown_time = 0.20
+        contact_presence_force = 5.0
+
+        contact_confirm_min_time = 0.10
+        contact_confirm_max_time = 0.45
+        contact_confirm_stable_steps = 3
+        contact_confirm_rebound_speed = 0.08
+        contact_confirm_base_vel_x = 0.18
+        contact_confirm_pitch_rate = 0.40
+        contact_confirm_leg_joint_vel = 1.0
+
+        roll_duration_base = 0.35
+        roll_duration_height_gain = 3.0
+        roll_height_margin = 0.01
+        roll_timeout_margin = 0.35
+        contact_loss_grace_steps = 2
+
+        crest_height_margin = 0.015
+        crest_entry_forward_ratio = 0.6
+        crest_entry_support_ratio = 0.6
+        crest_entry_support_steps = 2
+        crest_min_time = 0.12
+        crest_max_time = 0.50
+        crest_finish_forward_ratio = 1.2
+        crest_finish_vertical_force = 20.0
+        crest_finish_stable_steps = 3
+        crest_tangent_velocity = 0.15
+
+        recover_time = 0.25
+        cooldown_time = 0.25
 
     class noise(LeggedRobotCfg.noise):
-        add_noise = False
-        noise_level = 1.5
+        add_noise = True
+        noise_level = 1.0
 
         class noise_scales(LeggedRobotCfg.noise.noise_scales): # 噪声缩放因子
             dof_pos = 0.01  # 关节位置噪声
@@ -187,16 +212,23 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
             # task related rewards
             # feet_air_time = 20
-            feet_contact_number = 5
+            feet_contact_number = 0.0
             # air_wheel_vel = -2.0
             # wheel_all_air = -10
-            feet_clearance = -5
+            feet_clearance = 0.0
             foot_landing_vel = -5
-            swing_foot_lift = 10
-            swing_apex_vel = -2.0
-            triggered_leg_up_vel = 2.0
+            swing_foot_lift = 0.0
+            swing_apex_vel = 0.0
+            triggered_leg_up_vel = 0.0
             wrong_leg_lift = -10.0
             triggered_leg_action_dir = 0.0
+            roll_height_trajectory = 8.0
+            roll_tangent_tracking = 6.0
+            guided_contact = 3.0
+            crest_progress = 4.0
+            contact_loss = -2.0
+            excess_blocking_force = -5.0
+            reverse_selected_wheel = -1.0
 
             # tracking related rewards
             tracking_goal = 2
@@ -226,11 +258,11 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             orientation = -12.0
             feet_distance = -10
             base_height = -20
-            wheel_zero_velocity = 0.5
-            wheel_spin = -20
+            wheel_zero_velocity = 0.0
+            wheel_spin = 0.0
             # blocked_wheel_action = -10
             feet_contact_forces = -5
-            feet_contact_forces_x = -5
+            feet_contact_forces_x = 0.0
             collision = -50.0
             keep_balance = 1
 
@@ -259,6 +291,14 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         contact_force_sigma = 40.0
         swing_height_tracking_sigma = 0.03
         swing_apex_velocity_scale = 0.30
+        roll_height_tracking_sigma = 0.025
+        roll_vertical_velocity_tracking_sigma = 0.15
+        roll_tangent_tracking_sigma = 0.10
+        crest_tangent_tracking_sigma = 0.10
+        guided_contact_force_min = 8.0
+        guided_contact_force_max = 40.0
+        excessive_blocking_force = 80.0
+        excessive_blocking_force_scale = 40.0
     class sim(LeggedRobotCfg.sim):
         dt = 0.005  # 模拟时间步长 [秒]
         substeps = 1  # 每个时间步的子步数
