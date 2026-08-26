@@ -226,12 +226,21 @@ def _set_wheel_contact_colors(env):
     # contacts = (contact_xy > threshold).detach().cpu()
     # no_contact_color = gymapi.Vec3(1.0, 0.5, 0.0)
     # contact_color = gymapi.Vec3(0.0, 1.0, 0.0)
-    swing_mask = (env.swing_mask > 0.5).detach().cpu()
+    # upstairs_cp_liang uses the contact-guided rolling state machine and
+    # exposes ``roll_mask``; older upstairs tasks still expose ``swing_mask``.
+    # Prefer the new interface while keeping this shared Play script compatible
+    # with both task families.
+    if hasattr(env, "roll_mask"):
+        active_mask = (env.roll_mask > 0.5).detach().cpu()
+    elif hasattr(env, "swing_mask"):
+        active_mask = (env.swing_mask > 0.5).detach().cpu()
+    else:
+        return
     stance_color = gymapi.Vec3(1.0, 0.5, 0.0)
-    swing_color = gymapi.Vec3(0.0, 1.0, 0.0)
+    active_color = gymapi.Vec3(0.0, 1.0, 0.0)
     for env_id in range(env.num_envs):
         for wheel_id in range(len(env.feet_indices)):
-            color = swing_color if bool(swing_mask[env_id, wheel_id]) else stance_color
+            color = active_color if bool(active_mask[env_id, wheel_id]) else stance_color
             env.gym.set_rigid_body_color(
                 env.envs[env_id],
                 env.actor_handles[env_id],
