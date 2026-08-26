@@ -34,6 +34,9 @@ from scipy import interpolate
 
 from isaacgym import terrain_utils
 from wheel_legged_gym.envs.base.legged_robot_config import LeggedRobotCfg
+from wheel_legged_gym.utils.wheel_center_trajectory import (
+    curriculum_obstacle_height,
+)
 
 
 class Terrain:
@@ -114,7 +117,7 @@ class Terrain:
                 difficulty = i / self.cfg.num_rows                                  # 地形难度
                 choice = j / self.cfg.num_cols + 0.001                              # 选择一种地形
 
-                terrain = self.make_terrain(choice, difficulty)                     # 选择一种地形及难度,相当于给一块地图配置好地形信息
+                terrain = self.make_terrain(choice, difficulty, level_index=i)      # 选择一种地形及难度,相当于给一块地图配置好地形信息
                 self.add_terrain_to_map(terrain, i, j)                              # 把配置好的地形加载到总地图
 
     def selected_terrain(self):
@@ -134,7 +137,7 @@ class Terrain:
             eval(terrain_type)(terrain, **self.cfg.terrain_kwargs.terrain_kwargs)   # 调用地形生成函数
             self.add_terrain_to_map(terrain, i, j)                                  # 把子地形放入地图
 
-    def make_terrain(self, choice, difficulty):
+    def make_terrain(self, choice, difficulty, level_index=None):
         terrain = terrain_utils.SubTerrain(
             "terrain",
             width=self.width_per_env_pixels,                    # 整张地图的宽度像素
@@ -150,11 +153,28 @@ class Terrain:
         # else:
         #     step_height = 0.05 + 0.2 * (difficulty - 0.4)                 # 台阶高度
         #     step_width = 0.3                                    # 台阶宽度
-        step_height = 0.02 + 0.2 * difficulty                   # 台阶高度
+        has_task_height_range = hasattr(self.cfg, "obstacle_height_min") and hasattr(
+            self.cfg, "obstacle_height_max"
+        )
+        if has_task_height_range and level_index is not None:
+            obstacle_height = curriculum_obstacle_height(
+                level_index,
+                self.cfg.num_rows,
+                self.cfg.obstacle_height_min,
+                self.cfg.obstacle_height_max,
+            )
+        elif has_task_height_range:
+            obstacle_height = self.cfg.obstacle_height_min + (
+                self.cfg.obstacle_height_max - self.cfg.obstacle_height_min
+            ) * difficulty
+        else:
+            obstacle_height = 0.02 + 0.2 * difficulty
+
+        step_height = obstacle_height                              # 台阶高度
         step_width = 0.611 - 0.4 * difficulty                    # 台阶宽度
         # if difficulty >= 0.4:
         #     step_width = 0.3                                    # 台阶宽度
-        discrete_obstacles_height = 0.02 + difficulty * 0.2     # 离散障碍物高度
+        discrete_obstacles_height = obstacle_height              # 离散障碍物高度
         stepping_stones_size = 1.5 * (1.05 - difficulty)        # 石头尺寸
         stone_distance = 0.05 if difficulty == 0 else 0.1       # 石头距离
         gap_size = 1.0 * difficulty                             # 沟宽度尺寸
@@ -189,9 +209,14 @@ class Terrain:
                 terrain, slope=slope, platform_size=3.0
             )
         elif choice < self.proportions[2]:
+            block_height = (
+                discrete_obstacles_height
+                if has_task_height_range
+                else 0.02 + difficulty * 0.1
+            )
             platform_surrounded_small_blocks_terrain(
                 terrain,
-                block_height=0.02 + difficulty * 0.1,
+                block_height=block_height,
                 block_length=0.4,
                 block_width=0.4,
                 spacing_x=1.5,
@@ -202,7 +227,7 @@ class Terrain:
             )
             num_goals = self.num_goals
             terrain.goals = np.zeros((num_goals, 3))
-            terrain.step_height = 0.02 + difficulty * 0.1
+            terrain.step_height = block_height
             # for k in range(num_goals):
             #     terrain.goals[k] = [self.env_length * 1.5, self.env_width / 2.0, 0.2]
             for k in range(num_goals):
@@ -421,4 +446,3 @@ def platform_surrounded_small_blocks_terrain(
         x += spacing_x_px
 
     terrain.height_field_raw[platform_x1:platform_x2, platform_y1:platform_y2] = 0
-

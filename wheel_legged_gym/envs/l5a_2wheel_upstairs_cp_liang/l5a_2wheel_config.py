@@ -46,6 +46,9 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         curriculum = True
         num_rows = 10  # number of terrain rows (levels),地形网格的行数(难度级别)
         num_cols = 10  # number of terrain cols (types),地形网格的列数(类型)
+        max_init_terrain_level = 2
+        obstacle_height_min = 0.02
+        obstacle_height_max = 0.16
         # terrain types: [smooth slope, rough slope, stairs up, stairs down, discrete]
         terrain_proportions = [0.1, 0.0, 0.2, 0.0, 0.7, 0.0, 0.0, 0.0, 0.0] # 地形类型比例分布
         num_goals = 2
@@ -103,6 +106,29 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         # 抽取率：每个策略时间步长内的控制动作更新次数
         decimation = 4
 
+    class wheel_trajectory:
+        num_samples = 33
+        min_command_speed = 0.1
+        progress_threshold = 0.95
+        end_tolerance = 0.04
+        support_force_threshold = 20.0
+        required_support_steps = 2
+        minimum_duration = 0.10
+        timeout_base = 0.60
+        timeout_height_gain = 5.0
+        cooldown_time = 0.20
+        repeat_trigger_window = 0.50
+        repeat_trigger_distance = 0.18
+        path_sigma = 0.025
+        roll_sigma = 0.15
+        motion_gate_speed = 0.10
+        contact_force_min = 5.0
+        contact_force_soft_max = 80.0
+        contact_force_scale = 40.0
+        wheel_forward_sign = [1.0, 1.0]
+        error_histogram_bin_width = 0.005
+        error_histogram_num_bins = 81
+
     class asset(LeggedRobotCfg.asset):
         file = "{WHEEL_LEGGED_GYM_ROOT_DIR}/resources/robots/l5a/urdf/l5aurdf20260521.urdf" # 机器人urdf路径
         name = "l5a" # 机器人名称
@@ -154,15 +180,20 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
         class scales: # 奖励缩放因子
             # task related rewards
             # feet_air_time = 20
-            feet_contact_number = 5
+            feet_contact_number = 0
             # air_wheel_vel = -2.0
             # wheel_all_air = -10
-            feet_clearance = -5
+            feet_clearance = 0
             foot_landing_vel = -5
-            swing_foot_lift = 10
-            triggered_leg_up_vel = 10.0
+            swing_foot_lift = 0
+            triggered_leg_up_vel = 0
             wrong_leg_lift = -10.0
-            triggered_leg_action_dir = 10.0
+            triggered_leg_action_dir = 0
+            wheel_center_trajectory = 4.0
+            wheel_center_progress = 2.0
+            wheel_tangent_roll = 3.0
+            guided_wheel_contact = 1.5
+            selected_wheel_excess_force = -2.0
 
             # tracking related rewards
             tracking_goal = 2
@@ -192,7 +223,7 @@ class L5A_2WHEEL_Cfg(LeggedRobotCfg):
             orientation = -12.0
             feet_distance = -10
             base_height = -20
-            wheel_zero_velocity = 0.5
+            wheel_zero_velocity = 0
             wheel_spin = -20
             # blocked_wheel_action = -10
             feet_contact_forces = -5
@@ -266,6 +297,7 @@ class L5A_2WHEEL_CfgPPO(LeggedRobotCfgPPO):
 
         # logging
         experiment_name = "l5a_2wheel"
+        run_name = "wheel_center_trajectory"
         resume = False
         load_run = -1
         checkpoint = -1

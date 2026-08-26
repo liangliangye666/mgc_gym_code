@@ -52,6 +52,13 @@ from wheel_legged_gym.utils.math import (
     quat_from_euler_zyx,
 )
 from wheel_legged_gym.utils.helpers import class_to_dict
+from wheel_legged_gym.utils.wheel_center_trajectory import (
+    histogram_quantile,
+    nearest_wheel_center_path_state,
+    tangent_rolling_error,
+    wheel_center_path,
+    wheel_trajectory_completion,
+)
 from .l5a_2wheel_config import L5A_2WHEEL_Cfg
 
 
@@ -71,6 +78,9 @@ class L5A_2WHEEL(LeggedRobot):
         """
         self.cfg = cfg # 获取训练环境配置参数
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
+        # The privileged observation reads target_pos_rel on the first step,
+        # before this subclass' post_physics_step() has run once.
+        self._update_goals()
 
     def reset_idx(self, env_ids):
         """Reset some environments.
@@ -131,6 +141,25 @@ class L5A_2WHEEL(LeggedRobot):
         self.stance_mask[env_ids] = 1.0                         # 两条腿都重置为支撑腿
         self.in_double_support[env_ids] = True                        # 双支撑
         self.ds_time[env_ids] = 0.0                                # 双支撑时间
+        self.trajectory_start_positions[env_ids] = 0.0
+        self.trajectory_history_valid[env_ids] = False
+        self.trajectory_forward_directions[env_ids] = 0.0
+        self.trajectory_command_directions[env_ids] = 1.0
+        self.trajectory_progress[env_ids] = 0.0
+        self.trajectory_progress_rate[env_ids] = 0.0
+        self.trajectory_path_error[env_ids] = 0.0
+        self.trajectory_end_error[env_ids] = 0.0
+        self.trajectory_tangent_speed[env_ids] = 0.0
+        self.trajectory_roll_error[env_ids] = 0.0
+        self.trajectory_forward_wheel_speed[env_ids] = 0.0
+        self.trajectory_selected_contact_force[env_ids] = 0.0
+        self.trajectory_reward_mask[env_ids] = 0.0
+        self.trajectory_reward_wheel_mask[env_ids] = 0.0
+        self.trajectory_support_steps[env_ids] = 0
+        self.swing_cooldown[env_ids] = 0.0
+        self.time_since_swing_end[env_ids] = (
+            self.cfg.wheel_trajectory.repeat_trigger_window + self.dt
+        )
 
         # fill extras
         self.extras["episode"] = {} # 创建一个空字典用于存储当前回合的统计信息
@@ -162,6 +191,7 @@ class L5A_2WHEEL(LeggedRobot):
         self.episode_action_abs_sum[env_ids] = 0.0
         self.episode_delta_action_abs_sum[env_ids] = 0.0
         self.episode_dd_action_abs_sum[env_ids] = 0.0
+        self._log_wheel_trajectory_episode_metrics(env_ids)
         
         # log additional curriculum info
         if self.cfg.terrain.curriculum: # 地形课程信息记录
@@ -420,6 +450,93 @@ class L5A_2WHEEL(LeggedRobot):
         self.has_swing = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self.in_double_support = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)                        # 双支撑
         self.ds_time = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)                                # 双支撑时间
+        self.trajectory_start_positions = torch.zeros(
+            self.num_envs, 3, dtype=torch.float, device=self.device
+        )
+        self.trajectory_history_valid = torch.zeros(
+            self.num_envs, dtype=torch.bool, device=self.device
+        )
+        self.trajectory_forward_directions = torch.zeros_like(
+            self.trajectory_start_positions
+        )
+        self.trajectory_command_directions = torch.ones(
+            self.num_envs, dtype=torch.float, device=self.device
+        )
+        self.trajectory_progress = torch.zeros(
+            self.num_envs, dtype=torch.float, device=self.device
+        )
+        self.trajectory_progress_rate = torch.zeros_like(self.trajectory_progress)
+        self.trajectory_path_error = torch.zeros_like(self.trajectory_progress)
+        self.trajectory_end_error = torch.zeros_like(self.trajectory_progress)
+        self.trajectory_tangent_speed = torch.zeros_like(self.trajectory_progress)
+        self.trajectory_roll_error = torch.zeros_like(self.trajectory_progress)
+        self.trajectory_forward_wheel_speed = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.trajectory_selected_contact_force = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.trajectory_reward_mask = torch.zeros_like(self.trajectory_progress)
+        self.trajectory_reward_wheel_mask = torch.zeros(
+            self.num_envs, len(self.feet_indices), dtype=torch.float, device=self.device
+        )
+        self.trajectory_support_steps = torch.zeros(
+            self.num_envs, dtype=torch.long, device=self.device
+        )
+        self.swing_cooldown = torch.zeros_like(self.trajectory_progress)
+        self.time_since_swing_end = torch.full_like(
+            self.trajectory_progress,
+            self.cfg.wheel_trajectory.repeat_trigger_window + self.dt,
+        )
+        self.wheel_forward_sign = torch.tensor(
+            self.cfg.wheel_trajectory.wheel_forward_sign,
+            dtype=torch.float,
+            device=self.device,
+        )
+        if self.wheel_forward_sign.numel() != len(self.feet_indices):
+            raise ValueError(
+                "wheel_forward_sign must contain one sign per wheel/foot"
+            )
+
+        self.episode_trajectory_active_steps = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_path_error_sq = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_roll_error_sq = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_contact_steps = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_forward_wheel_speed = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_reverse_wheel_speed = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_peak_contact_force = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_triggers = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_completions = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_timeouts = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_retriggers = torch.zeros_like(
+            self.trajectory_progress
+        )
+        self.episode_trajectory_error_histogram = torch.zeros(
+            self.num_envs,
+            self.cfg.wheel_trajectory.error_histogram_num_bins,
+            dtype=torch.float,
+            device=self.device,
+        )
         self.episode_action_abs_sum = torch.zeros(
             self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False
         )
@@ -440,11 +557,271 @@ class L5A_2WHEEL(LeggedRobot):
         self.episode_delta_action_abs_sum += torch.abs(delta_action)
         self.episode_dd_action_abs_sum += torch.abs(dd_action)
 
+    def _log_wheel_trajectory_episode_metrics(self, env_ids):
+        active_steps = torch.sum(self.episode_trajectory_active_steps[env_ids])
+        safe_active_steps = torch.clamp(active_steps, min=1.0)
+        path_error_sq = torch.sum(
+            self.episode_trajectory_path_error_sq[env_ids]
+        )
+        roll_error_sq = torch.sum(
+            self.episode_trajectory_roll_error_sq[env_ids]
+        )
+        contact_steps = torch.sum(
+            self.episode_trajectory_contact_steps[env_ids]
+        )
+        histogram = torch.sum(
+            self.episode_trajectory_error_histogram[env_ids], dim=0
+        )
+        trigger_count = torch.sum(self.episode_trajectory_triggers[env_ids])
+        safe_trigger_count = torch.clamp(trigger_count, min=1.0)
+        triggered_envs = self.episode_trajectory_triggers[env_ids] > 0
+        if triggered_envs.any():
+            mean_peak_force = torch.mean(
+                self.episode_trajectory_peak_contact_force[env_ids][triggered_envs]
+            )
+        else:
+            mean_peak_force = torch.zeros((), device=self.device)
+
+        metrics = self.extras["episode"]
+        metrics["wheel_trajectory_path_rms"] = torch.sqrt(
+            path_error_sq / safe_active_steps
+        )
+        metrics["wheel_trajectory_path_p95"] = histogram_quantile(
+            histogram,
+            0.95,
+            self.cfg.wheel_trajectory.error_histogram_bin_width,
+        )
+        metrics["wheel_trajectory_roll_error_rms"] = torch.sqrt(
+            roll_error_sq / safe_active_steps
+        )
+        metrics["wheel_trajectory_contact_duty"] = (
+            contact_steps / safe_active_steps
+        )
+        metrics["wheel_trajectory_forward_wheel_speed"] = torch.sum(
+            self.episode_trajectory_forward_wheel_speed[env_ids]
+        ) / safe_active_steps
+        metrics["wheel_trajectory_reverse_wheel_speed"] = torch.sum(
+            self.episode_trajectory_reverse_wheel_speed[env_ids]
+        ) / safe_active_steps
+        metrics["wheel_trajectory_peak_contact_force"] = mean_peak_force
+        metrics["wheel_trajectory_completion_rate"] = torch.sum(
+            self.episode_trajectory_completions[env_ids]
+        ) / safe_trigger_count
+        metrics["wheel_trajectory_timeout_rate"] = torch.sum(
+            self.episode_trajectory_timeouts[env_ids]
+        ) / safe_trigger_count
+        metrics["wheel_trajectory_retrigger_rate"] = torch.sum(
+            self.episode_trajectory_retriggers[env_ids]
+        ) / safe_trigger_count
+
+        self.episode_trajectory_active_steps[env_ids] = 0.0
+        self.episode_trajectory_path_error_sq[env_ids] = 0.0
+        self.episode_trajectory_roll_error_sq[env_ids] = 0.0
+        self.episode_trajectory_contact_steps[env_ids] = 0.0
+        self.episode_trajectory_forward_wheel_speed[env_ids] = 0.0
+        self.episode_trajectory_reverse_wheel_speed[env_ids] = 0.0
+        self.episode_trajectory_peak_contact_force[env_ids] = 0.0
+        self.episode_trajectory_triggers[env_ids] = 0.0
+        self.episode_trajectory_completions[env_ids] = 0.0
+        self.episode_trajectory_timeouts[env_ids] = 0.0
+        self.episode_trajectory_retriggers[env_ids] = 0.0
+        self.episode_trajectory_error_histogram[env_ids] = 0.0
+
+    def _capture_wheel_trajectory(self, start_swing, candidate):
+        start_ids = start_swing.nonzero(as_tuple=False).flatten()
+        if len(start_ids) == 0:
+            return
+
+        selected_wheels = candidate[start_ids]
+        self.current_swing[start_ids] = selected_wheels
+        self.has_swing[start_ids] = True
+        self.swing_time[start_ids] = 0.0
+        new_start_positions = self.foot_positions[
+            start_ids, selected_wheels
+        ]
+        start_distance = torch.linalg.vector_norm(
+            new_start_positions[:, :2]
+            - self.trajectory_start_positions[start_ids, :2],
+            dim=1,
+        )
+        retrigger = (
+            self.trajectory_history_valid[start_ids]
+            & (
+                self.time_since_swing_end[start_ids]
+                < self.cfg.wheel_trajectory.repeat_trigger_window
+            )
+            & (
+                start_distance
+                < self.cfg.wheel_trajectory.repeat_trigger_distance
+            )
+        )
+        self.episode_trajectory_retriggers[start_ids] += retrigger.float()
+        self.episode_trajectory_triggers[start_ids] += 1.0
+        self.trajectory_start_positions[start_ids] = new_start_positions
+        self.trajectory_history_valid[start_ids] = True
+
+        local_forward = torch.zeros(
+            len(start_ids), 3, dtype=torch.float, device=self.device
+        )
+        local_forward[:, 0] = 1.0
+        world_forward = quat_apply_yaw(self.base_quat[start_ids], local_forward)
+        command_direction = torch.sign(self.commands[start_ids, 0])
+        command_direction = torch.where(
+            command_direction == 0,
+            torch.ones_like(command_direction),
+            command_direction,
+        )
+        world_forward = world_forward * command_direction.unsqueeze(1)
+        world_forward[:, 2] = 0.0
+        world_forward = world_forward / torch.clamp(
+            torch.linalg.vector_norm(world_forward, dim=1, keepdim=True),
+            min=1e-6,
+        )
+        self.trajectory_forward_directions[start_ids] = world_forward
+        self.trajectory_command_directions[start_ids] = command_direction
+        self.trajectory_progress[start_ids] = 0.0
+        self.trajectory_progress_rate[start_ids] = 0.0
+        self.trajectory_support_steps[start_ids] = 0
+
+    def _update_wheel_trajectory_tracking(self, in_swing):
+        env_ids = torch.arange(self.num_envs, device=self.device)
+        selected_wheels = self.current_swing
+        wheel_position = self.foot_positions[env_ids, selected_wheels]
+        displacement = wheel_position - self.trajectory_start_positions
+        forward_displacement = torch.sum(
+            displacement * self.trajectory_forward_directions, dim=1
+        )
+        actual_position = torch.stack(
+            (forward_displacement, displacement[:, 2]), dim=1
+        )
+
+        points, tangents, _ = wheel_center_path(
+            self.env_step_height,
+            self.cfg.asset.wheel_radius,
+            self.cfg.wheel_trajectory.num_samples,
+        )
+        path_error, progress, tangent, end_error = (
+            nearest_wheel_center_path_state(actual_position, points, tangents)
+        )
+        previous_progress = self.trajectory_progress.clone()
+        progress_rate = torch.clamp(
+            (progress - previous_progress) / self.dt, min=-1.0, max=1.0
+        )
+
+        tangent_world = (
+            self.trajectory_forward_directions * tangent[:, 0].unsqueeze(1)
+        )
+        tangent_world[:, 2] += tangent[:, 1]
+        selected_wheel_velocity = self.foot_velocities[env_ids, selected_wheels]
+        tangent_speed = torch.sum(selected_wheel_velocity * tangent_world, dim=1)
+        selected_wheel_angular_velocity = self.dof_vel[:, self.wheel_indices][
+            env_ids, selected_wheels
+        ]
+        selected_forward_sign = self.wheel_forward_sign[selected_wheels]
+        roll_error = tangent_rolling_error(
+            tangent_speed,
+            selected_wheel_angular_velocity,
+            self.cfg.asset.wheel_radius,
+            self.trajectory_command_directions,
+            selected_forward_sign,
+        )
+        forward_wheel_speed = (
+            self.trajectory_command_directions
+            * selected_forward_sign
+            * selected_wheel_angular_velocity
+        )
+
+        selected_contact_forces = self.contact_forces[:, self.feet_indices, :][
+            env_ids, selected_wheels
+        ]
+        contact_force = torch.linalg.vector_norm(selected_contact_forces, dim=1)
+        vertical_force = torch.relu(selected_contact_forces[:, 2])
+
+        active = in_swing.float()
+        self.trajectory_path_error = path_error * active
+        self.trajectory_end_error = end_error * active
+        self.trajectory_progress_rate = progress_rate * active
+        self.trajectory_tangent_speed = tangent_speed * active
+        self.trajectory_roll_error = roll_error * active
+        self.trajectory_forward_wheel_speed = forward_wheel_speed * active
+        self.trajectory_selected_contact_force = contact_force * active
+        self.trajectory_progress = torch.where(
+            in_swing, progress, self.trajectory_progress
+        )
+        self.trajectory_reward_mask = active
+        self.trajectory_reward_wheel_mask.zero_()
+        self.trajectory_reward_wheel_mask[env_ids, selected_wheels] = active
+
+        updated_support_steps, completed, timed_out = wheel_trajectory_completion(
+            progress,
+            end_error,
+            vertical_force,
+            self.trajectory_support_steps,
+            self.swing_time,
+            self.env_step_height,
+            self.cfg.wheel_trajectory.progress_threshold,
+            self.cfg.wheel_trajectory.end_tolerance,
+            self.cfg.wheel_trajectory.support_force_threshold,
+            self.cfg.wheel_trajectory.required_support_steps,
+            self.cfg.wheel_trajectory.minimum_duration,
+            self.cfg.wheel_trajectory.timeout_base,
+            self.cfg.wheel_trajectory.timeout_height_gain,
+        )
+        self.trajectory_support_steps = torch.where(
+            in_swing,
+            updated_support_steps,
+            torch.zeros_like(updated_support_steps),
+        )
+
+        self._update_wheel_trajectory_episode_stats(
+            in_swing, path_error, roll_error, forward_wheel_speed, contact_force
+        )
+        return completed & in_swing, timed_out & in_swing
+
+    def _update_wheel_trajectory_episode_stats(
+        self,
+        in_swing,
+        path_error,
+        roll_error,
+        forward_wheel_speed,
+        contact_force,
+    ):
+        active = in_swing.float()
+        self.episode_trajectory_active_steps += active
+        self.episode_trajectory_path_error_sq += torch.square(path_error) * active
+        self.episode_trajectory_roll_error_sq += torch.square(roll_error) * active
+        contact_active = (
+            contact_force >= self.cfg.wheel_trajectory.contact_force_min
+        ).float()
+        self.episode_trajectory_contact_steps += contact_active * active
+        self.episode_trajectory_forward_wheel_speed += (
+            torch.relu(forward_wheel_speed) * active
+        )
+        self.episode_trajectory_reverse_wheel_speed += (
+            torch.relu(-forward_wheel_speed) * active
+        )
+        self.episode_trajectory_peak_contact_force = torch.maximum(
+            self.episode_trajectory_peak_contact_force,
+            contact_force * active,
+        )
+
+        active_ids = in_swing.nonzero(as_tuple=False).flatten()
+        if len(active_ids) > 0:
+            error_bins = torch.clamp(
+                torch.floor(
+                    path_error[active_ids]
+                    / self.cfg.wheel_trajectory.error_histogram_bin_width
+                ).long(),
+                min=0,
+                max=self.cfg.wheel_trajectory.error_histogram_num_bins - 1,
+            )
+            self.episode_trajectory_error_histogram[
+                active_ids, error_bins
+            ] += 1.0
+
     def _get_swing_stance_mask(self):
         # ===== 1. 接触检测 =====
         force_world = self.contact_forces[:, self.feet_indices, :]      # [N, 2, 3]
-        force_xy = torch.norm(force_world[:, :, :2], dim=2)
-        # print("force_xy:", force_xy[0])
         force_base = torch.zeros_like(force_world)
 
         for i in range(len(self.feet_indices)):
@@ -454,7 +831,6 @@ class L5A_2WHEEL(LeggedRobot):
             )
 
         force_x = force_base[:, :, 0]                                   # [N, 2]
-        # print("force_x:", force_x[0])
         vel_cmd = self.commands[:, 0].unsqueeze(1)
         vel_threshold = 0
         force_threshold = 10.0
@@ -467,17 +843,13 @@ class L5A_2WHEEL(LeggedRobot):
         backward_blocked = (vel_cmd < -vel_threshold) & (force_x < -force_threshold)
 
         no_swing = forward_blocked | backward_blocked                    # [N, 2]
-        # print("no_trigger:", no_trigger[0])
 
         # ===== 2. 稳定触发 =====
-        # 如果你只想瞬时触发，用这个：
-        # stable = trigger
-
-        # 如果你还想保留原来的接触历史抗抖，用这个：
         contact_history_stable = self.contact_history.sum(dim=2) >= 3
-        # print("contact_history:", contact_history_stable[0])
-        stable = (~no_swing) & contact_history_stable
-        # print("stable:", stable[0])
+        movement_requested = (
+            torch.abs(vel_cmd) >= self.cfg.wheel_trajectory.min_command_speed
+        )
+        stable = (~no_swing) & contact_history_stable & movement_requested
 
         need_swing = stable.sum(dim=1) > 0
 
@@ -488,40 +860,38 @@ class L5A_2WHEEL(LeggedRobot):
         if one_stable.any():
             candidate[one_stable] = torch.argmax(stable[one_stable].float(), dim=1)
 
-        # ===== 4. swing 状态机 =====
-        swing_duration = 0.05
-        lift_ratio_to_unlock = 0.9
-
-        start_swing = (~self.has_swing) & need_swing
-
-        if start_swing.any():
-            self.current_swing[start_swing] = candidate[start_swing]
-            self.has_swing[start_swing] = True
-            self.swing_time[start_swing] = 0.0
+        # ===== 4. 接触引导的轮心轨迹状态 =====
+        self.swing_cooldown = torch.clamp(
+            self.swing_cooldown - self.dt, min=0.0
+        )
+        self.time_since_swing_end += self.dt
+        start_swing = (
+            (~self.has_swing)
+            & (self.swing_cooldown <= 0.0)
+            & need_swing
+        )
+        self._capture_wheel_trajectory(start_swing, candidate)
 
         in_swing = self.has_swing
         self.swing_time[in_swing] += self.dt
-
-        env_ids = torch.arange(self.num_envs, device=self.device)
-        current_clearance = self.foot_heights[env_ids, self.current_swing]
-        target_clearance = self.env_step_height
-        lift_enough = current_clearance >= lift_ratio_to_unlock * target_clearance
-        # force_z = self.contact_forces[:, self.feet_indices, 2]
-        # current_force_z = force_z[env_ids, self.current_swing]
-        # support_enough = current_force_z >= 20
-        # print("cur:", current_clearance[0])
-        # print("tar:", lift_ratio_to_unlock * target_clearance[0])
-        swing_finished = (in_swing & lift_enough)
-        # current_force_xy = force_xy[torch.arange(self.num_envs, device=self.device), self.current_swing]
-        # swing_finished = (in_swing & (self.swing_time >= swing_duration) & (current_force_xy < force_threshold))
-        if swing_finished.any():
-            self.has_swing[swing_finished] = False
-            self.swing_time[swing_finished] = 0.0
+        swing_finished, swing_timed_out = self._update_wheel_trajectory_tracking(
+            in_swing
+        )
+        swing_ended = swing_finished | swing_timed_out
+        self.episode_trajectory_completions += swing_finished.float()
+        self.episode_trajectory_timeouts += swing_timed_out.float()
+        if swing_ended.any():
+            self.has_swing[swing_ended] = False
+            self.swing_time[swing_ended] = 0.0
+            self.trajectory_support_steps[swing_ended] = 0
+            self.swing_cooldown[swing_ended] = (
+                self.cfg.wheel_trajectory.cooldown_time
+            )
+            self.time_since_swing_end[swing_ended] = 0.0
 
         # ===== 5. 输出 mask =====
         self.swing_mask.zero_()
         self.swing_mask[torch.arange(self.num_envs), self.current_swing] = self.has_swing.float()
-        # print("swing:", self.swing_mask[0])
         self.stance_mask = 1.0 - self.swing_mask
         self.stance_mask[~self.has_swing] = 1.0
 
@@ -799,10 +1169,12 @@ class L5A_2WHEEL(LeggedRobot):
         """
         v_cmd = self.commands[:, 0]  # x方向速度指令
         wheel_vel = self.dof_vel[:, self.wheel_indices]  # (num_envs, 2)
-        # print("wheel_vel:", wheel_vel[0])
+        wheel_vel_forward = wheel_vel * self.wheel_forward_sign.unsqueeze(0)
         direction = torch.sign(v_cmd)
         # (num_envs, 2)
-        opposite_wheel_vel = torch.relu(-direction.unsqueeze(-1) * wheel_vel)
+        opposite_wheel_vel = torch.relu(
+            -direction.unsqueeze(-1) * wheel_vel_forward
+        )
         penalty = torch.sum(opposite_wheel_vel, dim=1)
         return penalty
     
@@ -921,6 +1293,59 @@ class L5A_2WHEEL(LeggedRobot):
         # progress = self.total_learning_iteration / 20000
         # decay = max(1.0-progress, 0.0)
         # return lift_reward * decay
+
+    def _reward_wheel_center_trajectory(self):
+        sigma = self.cfg.wheel_trajectory.path_sigma
+        return (
+            torch.exp(
+                -torch.square(self.trajectory_path_error)
+                / (2.0 * sigma * sigma)
+            )
+            * self.trajectory_reward_mask
+        )
+
+    def _reward_wheel_center_progress(self):
+        return self.trajectory_progress_rate * self.trajectory_reward_mask
+
+    def _reward_wheel_tangent_roll(self):
+        motion_gate = torch.clamp(
+            self.trajectory_tangent_speed
+            / self.cfg.wheel_trajectory.motion_gate_speed,
+            min=0.0,
+            max=1.0,
+        )
+        roll_sigma = self.cfg.wheel_trajectory.roll_sigma
+        return (
+            motion_gate
+            * torch.exp(-torch.square(self.trajectory_roll_error / roll_sigma))
+            * self.trajectory_reward_mask
+        )
+
+    def _reward_guided_wheel_contact(self):
+        contact_force = self.trajectory_selected_contact_force
+        contact_active = (
+            contact_force >= self.cfg.wheel_trajectory.contact_force_min
+        ).float()
+        excess_force = torch.relu(
+            contact_force - self.cfg.wheel_trajectory.contact_force_soft_max
+        )
+        contact_quality = torch.exp(
+            -torch.square(
+                excess_force / self.cfg.wheel_trajectory.contact_force_scale
+            )
+        )
+        return (
+            contact_active
+            * contact_quality
+            * self.trajectory_reward_mask
+        )
+
+    def _reward_selected_wheel_excess_force(self):
+        normalized_excess = torch.relu(
+            self.trajectory_selected_contact_force
+            - self.cfg.wheel_trajectory.contact_force_soft_max
+        ) / self.cfg.wheel_trajectory.contact_force_scale
+        return normalized_excess * self.trajectory_reward_mask
     
     def _reward_wheel_zero_velocity(self):
         swing_mask = self.swing_mask
@@ -948,6 +1373,7 @@ class L5A_2WHEEL(LeggedRobot):
         # 论文公式
         slip_condition = wheel_lin_vel - wheel_actual_hor_vel - 0.1
         slip_penalty = torch.relu(slip_condition)
+        slip_penalty *= 1.0 - self.trajectory_reward_wheel_mask
         # 对两个轮子求和
         total_slip = torch.sum(slip_penalty, dim=1)
         # print("rew_wheel_spin:", total_slip[0])
