@@ -34,10 +34,7 @@ from scipy import interpolate
 
 from isaacgym import terrain_utils
 from wheel_legged_gym.envs.base.legged_robot_config import LeggedRobotCfg
-from wheel_legged_gym.utils.stair_stability import (
-    curriculum_obstacle_height,
-    heightfield_to_trimesh_with_bevel,
-)
+from wheel_legged_gym.utils.stair_stability import curriculum_obstacle_height
 
 
 class Terrain:
@@ -68,7 +65,6 @@ class Terrain:
         self.tot_rows = int(cfg.num_rows * self.length_per_env_pixels) + 2 * self.border    # 整个地图行像素
 
         self.height_field_raw = np.zeros((self.tot_rows, self.tot_cols), dtype=np.int16)    # 整张地图像素点高度全部置零,相当于一张空地图
-        self.edge_bevel_map = np.zeros_like(self.height_field_raw, dtype=np.float32)
         if cfg.curriculum:                                      # 课程学习
             self.curiculum()
         elif cfg.selected:
@@ -78,23 +74,14 @@ class Terrain:
 
         self.heightsamples = self.height_field_raw
         if self.type == "trimesh":                              # 把heightfield地形转换成三角网格地形,以便物理引擎使用
-            if hasattr(self.cfg, "sharp_edge_probability"):
-                self.vertices, self.triangles = heightfield_to_trimesh_with_bevel(
+            self.vertices, self.triangles = (
+                terrain_utils.convert_heightfield_to_trimesh(
                     self.height_field_raw,
                     self.cfg.horizontal_scale,
                     self.cfg.vertical_scale,
                     self.cfg.slope_treshold,
-                    self.edge_bevel_map,
                 )
-            else:
-                self.vertices, self.triangles = (
-                    terrain_utils.convert_heightfield_to_trimesh(
-                        self.height_field_raw,
-                        self.cfg.horizontal_scale,
-                        self.cfg.vertical_scale,
-                        self.cfg.slope_treshold,
-                    )
-                )
+            )
         # 构建高度查询器
         self._build_height_querier()
 
@@ -156,7 +143,6 @@ class Terrain:
             vertical_scale=self.cfg.vertical_scale,             # 垂直缩放比例,对应z方向1代表多少
             horizontal_scale=self.cfg.horizontal_scale,         # 水平缩放比例,对应x-y平面1代表多少
         )
-        terrain.edge_bevel = 0.0
         slope = difficulty * 0.5                                # 斜率
         random_height = 0.02 + difficulty * 0.2                 # 随机高度
         # if difficulty <= 0.4:
@@ -165,10 +151,7 @@ class Terrain:
         # else:
         #     step_height = 0.05 + 0.2 * (difficulty - 0.4)                 # 台阶高度
         #     step_width = 0.3                                    # 台阶宽度
-        fixed_obstacle_height = getattr(self.cfg, "fixed_obstacle_height", None)
-        if fixed_obstacle_height is not None:
-            step_height = float(fixed_obstacle_height)
-        elif hasattr(self.cfg, "obstacle_height_min") and hasattr(
+        if hasattr(self.cfg, "obstacle_height_min") and hasattr(
             self.cfg, "obstacle_height_max"
         ):
             step_height = curriculum_obstacle_height(
@@ -217,7 +200,6 @@ class Terrain:
                 terrain, slope=slope, platform_size=3.0
             )
         elif choice < self.proportions[2]:
-            terrain.edge_bevel = self._sample_edge_bevel()
             platform_surrounded_small_blocks_terrain(
                 terrain,
                 block_height=discrete_obstacles_height,
@@ -274,7 +256,6 @@ class Terrain:
                 terrain.goals[k] = [15.0, y_rand, 0.2]
                 # terrain.goals[k] = [8.0, 4.0, 0.2]
         elif choice < self.proportions[5]:
-            terrain.edge_bevel = self._sample_edge_bevel()
             if choice < self.proportions[4]:
                 step_height *= -1
             terrain_utils.pyramid_stairs_terrain(       # 生成台阶地形
@@ -301,7 +282,6 @@ class Terrain:
                     terrain.goals[k] = [self.env_length * 1.5, center_y, 0.2]
 
         elif choice < self.proportions[6]:
-            terrain.edge_bevel = self._sample_edge_bevel()
             num_rectangles = 4                         # 随机矩形障碍的数量
             rectangle_min_size = 2.5                    # 随机矩形障碍的尺寸
             rectangle_max_size = 3.5
@@ -343,16 +323,6 @@ class Terrain:
 
         return terrain
 
-    def _sample_edge_bevel(self):
-        """Sample a per-subterrain collision bevel without changing its height map."""
-        if not hasattr(self.cfg, "sharp_edge_probability"):
-            return 0.0
-        if np.random.rand() < self.cfg.sharp_edge_probability:
-            return 0.0
-        return float(
-            np.random.uniform(self.cfg.edge_bevel_min, self.cfg.edge_bevel_max)
-        )
-
     def add_terrain_to_map(self, terrain, row, col):                    # 加载地形,设置原点
         i = row
         j = col
@@ -362,9 +332,6 @@ class Terrain:
         start_y = self.border + j * self.width_per_env_pixels
         end_y = self.border + (j + 1) * self.width_per_env_pixels
         self.height_field_raw[start_x:end_x, start_y:end_y] = terrain.height_field_raw
-        self.edge_bevel_map[start_x:end_x, start_y:end_y] = getattr(
-            terrain, "edge_bevel", 0.0
-        )
 
         env_origin_x = (i + 0.5) * self.env_length
         env_origin_y = (j + 0.5) * self.env_width
